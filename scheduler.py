@@ -1,0 +1,186 @@
+"""Idle-based heartbeat scheduler."""
+
+from __future__ import annotations
+
+import random
+import threading
+import time
+from collections.abc import Callable
+from datetime import datetime
+
+from sdk.logging import get_logger
+
+from .config import ConfigStore, HeartbeatConfig, PLUGIN_ID
+from .vision import query_screen
+
+
+logger = get_logger(__name__, plugin_id=PLUGIN_ID)
+HEARTBEAT_MARKER = "[心跳·"
+
+
+class HeartbeatScheduler:
+    def __init__(
+        self,
+        config_store: ConfigStore,
+        emit_user_text: Callable[[str], None],
+        *,
+        screen_reader: Callable[[HeartbeatConfig], str | None] = query_screen,
+        clock: Callable[[], float] = time.monotonic,
+        wall_clock: Callable[[], datetime] = datetime.now,
+        rng: random.Random | None = None,
+        poll_seconds: float = 1.0,
+    ) -> None:
+        self._config_store = config_store
+        self._emit_user_text = emit_user_text
+        self._screen_reader = screen_reader
+        self._clock = clock
+        self._wall_clock = wall_clock
+        self._rng = rng or random.Random()
+        self._poll_seconds = max(0.05, float(poll_seconds))
+
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._active = False
+        self._last_activity_at = self._clock()
+        self._activity_generation = 0
+        self._was_enabled: bool | None = None
+
+    def start(self) -> None:
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._active = True
+            self._last_activity_at = self._clock()
+            self._stop_event.clear()
+            self._thread = threading.Thread(
+                target=self._run,
+                name="heartbeat_companion_loop",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def stop(self, timeout: float = 5.0) -> None:
+        with self._lock:
+            self._active = False
+            thread = self._thread
+            self._thread = None
+            self._stop_event.set()
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=timeout)
+
+    def note_user_activity(self) -> None:
+        with self._lock:
+            self._last_activity_at = self._clock()
+            self._activity_generation += 1
+
+    def tick(self) -> bool:
+        """Run one scheduler check; returns True when a heartbeat was emitted."""
+        config = self._config_store.get()
+        now = self._clock()
+
+        if not config.enabled:
+            self._was_enabled = False
+            return False
+        if self._was_enabled is False:
+            with self._lock:
+                self._last_activity_at = now
+            self._was_enabled = True
+            return False
+        self._was_enabled = True
+
+        with self._lock:
+            if not self._active:
+                return False
+            activity_at = self._last_activity_at
+            generation = self._activity_generation
+
+        interval_seconds = config.interval_minutes * 60.0
+        idle_seconds = max(0.0, now - activity_at)
+        if idle_seconds < interval_seconds:
+            return False
+
+        mode = self._choose_mode(config)
+        screen_summary: str | None = None
+        if mode == "screen":
+            screen_summary = self._screen_reader(config)
+            if screen_summary is None:
+                mode = self._choose_mode(config, allow_screen=False)
+
+        with self._lock:
+            if not self._active or generation != self._activity_generation:
+                return False
+            if activity_at != self._last_activity_at:
+                return False
+
+        message = self._build_message(
+            config,
+            mode=mode,
+            screen_summary=screen_summary,
+            idle_seconds=idle_seconds,
+        )
+        try:
+            self._emit_user_text(message)
+        except Exception:
+            logger.exception(
+                "Heartbeat input emission failed",
+                extra={"event": "heartbeat.emit.failed"},
+            )
+            return False
+
+        with self._lock:
+            self._last_activity_at = max(self._last_activity_at, now)
+        logger.info(
+            "Heartbeat emitted",
+            extra={"event": "heartbeat.emitted", "mode": mode},
+        )
+        return True
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(self._poll_seconds):
+            try:
+                self.tick()
+            except Exception:
+                logger.exception(
+                    "Heartbeat scheduler check failed",
+                    extra={"event": "heartbeat.scheduler.failed"},
+                )
+
+    def _choose_mode(self, config: HeartbeatConfig, *, allow_screen: bool = True) -> str:
+        modes = ["screen", "monologue", "question"] if allow_screen else ["monologue", "question"]
+        weights = [config.mode_weights.get(mode, 0.0) for mode in modes]
+        if not any(weights):
+            return "monologue"
+        return self._rng.choices(modes, weights=weights, k=1)[0]
+
+    def _build_message(
+        self,
+        config: HeartbeatConfig,
+        *,
+        mode: str,
+        screen_summary: str | None,
+        idle_seconds: float,
+    ) -> str:
+        local_time = self._wall_clock().strftime("%H:%M")
+        idle_minutes = _format_minutes(idle_seconds / 60.0)
+        prefix = f"[心跳·{_mode_label(mode)} {local_time}，已安静 {idle_minutes} 分钟]"
+        ending = "请保持当前角色设定，用当前对话语言自然回应 1–2 句，不要解释心跳机制。"
+
+        if mode == "screen" and screen_summary:
+            return f"{prefix} 屏幕摘要：{screen_summary}。{ending}"
+        instruction = (
+            config.question_instruction if mode == "question" else config.monologue_instruction
+        )
+        return f"{prefix} {instruction} {ending}"
+
+
+def _mode_label(mode: str) -> str:
+    return {"screen": "识屏", "question": "主动提问", "monologue": "自言自语"}.get(
+        mode, "自言自语"
+    )
+
+
+def _format_minutes(minutes: float) -> str:
+    if minutes < 1.0:
+        return f"{minutes:.1f}"
+    return str(int(minutes))

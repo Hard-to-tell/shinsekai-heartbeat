@@ -1,0 +1,9 @@
+{
+  "display_name": "Heartbeat Companion",
+  "desc": "Let the current Shinsekai character speak after the user has been idle, with optional Moondream screen context.",
+  "author": "Hard-to-tell",
+  "repo": "https://github.com/Hard-to-tell/shinsekai-heartbeat",
+  "lowest_shinsekai_version": ">=2.1.0",
+  "tags": ["heartbeat", "companion", "automation", "vision"],
+  "social_link": "https://github.com/Hard-to-tell"
+}

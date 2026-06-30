@@ -1,0 +1,1 @@
+# Heartbeat Companion has no direct third-party runtime dependencies.
