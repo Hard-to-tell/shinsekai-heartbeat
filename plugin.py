@@ -7,6 +7,7 @@ from pathlib import Path
 from sdk.plugin import PluginBase
 from sdk.plugin_host_context import PluginHostContext
 from sdk.register import PluginCapabilityRegistry
+from sdk.types import ChatUIContribution
 
 from . import runtime
 from .config import PLUGIN_ID
@@ -47,6 +48,24 @@ class HeartbeatCompanionPlugin(PluginBase):
         runtime.configure(plugin_root)
         register.register_user_input_processor(runtime.process_user_input)
         register.register_user_input_trigger(runtime.bind_emit)
+
+        def build_chat_bridge(context):
+            from PySide6.QtWidgets import QWidget
+
+            runtime.bind_chat_ui(context)
+            widget = QWidget()
+            widget.setObjectName("heartbeat_companion_event_bridge")
+            widget.setFixedSize(0, 0)
+            return widget
+
+        register.register_chat_ui_widget(
+            ChatUIContribution(
+                widget_id="heartbeat_companion.event_bridge",
+                placement="overlay",
+                build=build_chat_bridge,
+                order=1000.0,
+            )
+        )
 
     def shutdown(self) -> None:
         runtime.shutdown()

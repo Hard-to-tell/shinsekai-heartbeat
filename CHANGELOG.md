@@ -6,6 +6,8 @@
 - Randomize the target reply length.
 - Add JSON-editable fixed question and common expression pools.
 - Log each newly scheduled interval for easier diagnostics.
+- Avoid repeating the previous mode, fixed question, or expression when alternatives exist.
+- Pause heartbeats until the current LLM reply and TTS playback finish.
 
 ## 0.1.0 - 2026-06-30
 

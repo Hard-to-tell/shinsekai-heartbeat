@@ -16,6 +16,7 @@ from .vision import query_screen
 
 logger = get_logger(__name__, plugin_id=PLUGIN_ID)
 HEARTBEAT_MARKER = "[心跳·"
+BUSY_TIMEOUT_SECONDS = 30.0 * 60.0
 
 
 class HeartbeatScheduler:
@@ -48,6 +49,12 @@ class HeartbeatScheduler:
         self._needs_reschedule = True
         self._scheduled_range: tuple[float, float] | None = None
         self._next_due_at: float | None = None
+        self._reply_tracking = False
+        self._busy = False
+        self._busy_since: float | None = None
+        self._last_mode: str | None = None
+        self._last_fixed_question: str | None = None
+        self._last_expression: str | None = None
 
     def start(self) -> None:
         with self._lock:
@@ -75,6 +82,27 @@ class HeartbeatScheduler:
 
     def note_user_activity(self) -> None:
         with self._lock:
+            now = self._clock()
+            self._last_activity_at = now
+            self._activity_generation += 1
+            self._needs_reschedule = True
+            if self._reply_tracking:
+                self._busy = True
+                self._busy_since = now
+
+    def enable_reply_tracking(self, enabled: bool = True) -> None:
+        with self._lock:
+            self._reply_tracking = bool(enabled)
+            if not self._reply_tracking:
+                self._busy = False
+                self._busy_since = None
+
+    def note_reply_finished(self) -> None:
+        with self._lock:
+            if not self._reply_tracking:
+                return
+            self._busy = False
+            self._busy_since = None
             self._last_activity_at = self._clock()
             self._activity_generation += 1
             self._needs_reschedule = True
@@ -86,6 +114,26 @@ class HeartbeatScheduler:
 
         if not config.enabled:
             self._was_enabled = False
+            return False
+
+        with self._lock:
+            if not self._active:
+                return False
+            busy = self._busy
+            busy_since = self._busy_since
+        if busy:
+            if busy_since is None or now - busy_since < BUSY_TIMEOUT_SECONDS:
+                return False
+            with self._lock:
+                self._busy = False
+                self._busy_since = None
+                self._last_activity_at = now
+                self._activity_generation += 1
+                self._needs_reschedule = True
+            logger.warning(
+                "Heartbeat busy state timed out and was released",
+                extra={"event": "heartbeat.busy.timeout"},
+            )
             return False
         if self._was_enabled is False:
             with self._lock:
@@ -121,16 +169,25 @@ class HeartbeatScheduler:
             if activity_at != self._last_activity_at:
                 return False
 
-        message = self._build_message(
+        message, fixed_question, expression = self._build_message(
             config,
             mode=mode,
             screen_summary=screen_summary,
             idle_seconds=idle_seconds,
             sentence_count=self._rng.randint(*config.reply_sentence_range),
         )
+        with self._lock:
+            if self._reply_tracking:
+                self._busy = True
+                self._busy_since = now
         try:
             self._emit_user_text(message)
         except Exception:
+            with self._lock:
+                self._busy = False
+                self._busy_since = None
+                self._last_activity_at = now
+                self._needs_reschedule = True
             logger.exception(
                 "Heartbeat input emission failed",
                 extra={"event": "heartbeat.emit.failed"},
@@ -140,6 +197,11 @@ class HeartbeatScheduler:
         with self._lock:
             self._last_activity_at = max(self._last_activity_at, now)
             self._needs_reschedule = True
+        self._last_mode = mode
+        if fixed_question is not None:
+            self._last_fixed_question = fixed_question
+        if expression is not None:
+            self._last_expression = expression
         logger.info(
             "Heartbeat emitted",
             extra={"event": "heartbeat.emitted", "mode": mode},
@@ -161,6 +223,8 @@ class HeartbeatScheduler:
         weights = [config.mode_weights.get(mode, 0.0) for mode in modes]
         if not any(weights):
             return "monologue"
+        if sum(weight > 0 for weight in weights) > 1 and self._last_mode in modes:
+            weights[modes.index(self._last_mode)] = 0.0
         return self._rng.choices(modes, weights=weights, k=1)[0]
 
     def _ensure_schedule(self, config: HeartbeatConfig) -> None:
@@ -191,7 +255,7 @@ class HeartbeatScheduler:
         screen_summary: str | None,
         idle_seconds: float,
         sentence_count: int,
-    ) -> str:
+    ) -> tuple[str, str | None, str | None]:
         local_time = self._wall_clock().strftime("%H:%M")
         idle_minutes = _format_minutes(idle_seconds / 60.0)
         prefix = f"[心跳·{_mode_label(mode)} {local_time}，已安静 {idle_minutes} 分钟]"
@@ -201,21 +265,42 @@ class HeartbeatScheduler:
         )
 
         expression_hint = ""
+        expression: str | None = None
         if config.common_expressions and self._rng.random() < config.expression_chance:
-            expression = self._rng.choice(config.common_expressions)
+            expression = self._choose_without_repeat(
+                config.common_expressions, self._last_expression
+            )
             expression_hint = f" 可以自然融入这个表达或表情：{expression}；不要生硬堆砌。"
 
         if mode == "screen" and screen_summary:
-            return f"{prefix} 屏幕摘要：{screen_summary}。{ending}{expression_hint}"
+            return (
+                f"{prefix} 屏幕摘要：{screen_summary}。{ending}{expression_hint}",
+                None,
+                expression,
+            )
+        fixed_question: str | None = None
         if mode == "question":
             if config.fixed_questions and self._rng.random() < config.fixed_question_chance:
-                question = self._rng.choice(config.fixed_questions)
-                instruction = f"请按当前角色口吻自然地问用户这个问题，可以适当改写：{question}"
+                fixed_question = self._choose_without_repeat(
+                    config.fixed_questions, self._last_fixed_question
+                )
+                instruction = (
+                    "请按当前角色口吻自然地问用户这个问题，可以适当改写："
+                    f"{fixed_question}"
+                )
             else:
                 instruction = config.question_instruction
         else:
             instruction = config.monologue_instruction
-        return f"{prefix} {instruction} {ending}{expression_hint}"
+        return (
+            f"{prefix} {instruction} {ending}{expression_hint}",
+            fixed_question,
+            expression,
+        )
+
+    def _choose_without_repeat(self, values: tuple[str, ...], previous: str | None) -> str:
+        candidates = [value for value in values if value != previous]
+        return self._rng.choice(candidates or list(values))
 
 
 def _mode_label(mode: str) -> str:

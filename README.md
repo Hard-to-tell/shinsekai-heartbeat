@@ -1,39 +1,47 @@
-# Heartbeat Companion / 心跳陪伴
+# 心跳陪伴（Heartbeat Companion）
 
-让 Shinsekai 当前角色在用户安静一段时间后主动开口。每次心跳会按权重选择：
+让 Shinsekai 当前角色在用户安静一段时间后主动开口。插件会随机选择识屏、自言自语或主动提问；用户正常讲话后会重新计时。角色正在生成回复或播放 TTS 时不会插入新的心跳。
 
-- 复用 Moondream Vision 查看屏幕并回应；
-- 按当前角色人设说一两句自言自语；
-- 结合当前时间主动问用户一个简短问题。
-
-用户发送任何正常消息后，下一次心跳会重新等待完整间隔。
-
-> Target: Shinsekai 2.1.0+ · Version: 0.2.0 · License: MIT
+适用于 Shinsekai 2.1.0 及以上版本。插件本身不需要安装额外的 Python 依赖。
 
 ## 安装
 
-将仓库内容安装为：
+1. 在本仓库页面点击 **Code → Download ZIP**，下载后解压。
+2. 打开 Shinsekai 主程序所在文件夹，再打开其中的 `plugins` 文件夹。
+3. 新建文件夹 `heartbeat_companion`，把解压出来的全部文件复制进去。
+
+复制完成后必须是下面这种结构，不能再多套一层文件夹：
 
 ```text
-Shinsekai/plugins/heartbeat_companion/
+Shinsekai/
+└─ plugins/
+   └─ heartbeat_companion/
+      ├─ plugin.py
+      ├─ config.py
+      ├─ scheduler.py
+      └─ ...
 ```
 
-在 `data/config/plugins.yaml` 中登记：
+4. 用记事本打开 `Shinsekai/data/config/plugins.yaml`，在文件末尾加入：
 
 ```yaml
 - entry: plugins.heartbeat_companion.plugin:HeartbeatCompanionPlugin
   enabled: true
 ```
 
-然后完整重启 Shinsekai。首次加载会创建：
+不要删除文件里原有的其他插件。保存后完整关闭并重新启动 Shinsekai。
+
+首次成功加载会自动生成配置文件：
 
 ```text
-data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
+Shinsekai/data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 ```
 
-## 配置
+## 修改配置
 
-直接编辑生成的 `config.json`；插件每秒检查文件，保存后无需重启：
+用记事本打开上面的 `config.json`。保存后插件通常会在 1 秒内读取新配置，不需要重启。
+
+默认配置如下：
 
 ```json
 {
@@ -65,59 +73,28 @@ data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 }
 ```
 
-- `interval_minutes_range`：每轮从最小值到最大值之间随机抽取分钟数，默认 5–15 分钟。
-- `interval_minutes`：旧版固定间隔字段仍兼容；使用新随机区间时删除它。
-- `mode_weights`：三个非负权重；设为 `0` 可关闭对应模式。
-- `reply_sentence_range`：随机目标句数，允许 1–8。
-- `monitor_index`：`-1` 沿用 Moondream Vision 设置；也可指定显示器序号。
-- `fixed_questions`：问题模式可抽取的固定问题；可自由增删字符串。
-- `fixed_question_chance`：使用固定问题的概率，`0` 表示不用，`1` 表示每次都用。
-- `common_expressions`：可填写语气词、动作描写、颜文字或 emoji。
-- `expression_chance`：每轮提示角色自然融入常用表达的概率。
-- 全部权重为 `0` 时自动使用自言自语。
-- JSON 暂时写坏时会保留上一份有效配置，修正并保存即可。
+主要字段：
 
-心跳触发会作为一条简短用户消息显示在聊天记录中，角色回复继续使用当前 LLM、聊天窗和 TTS。
+- `interval_minutes_range`：随机间隔的最短和最长分钟数，例如 `[10, 30]`。
+- `mode_weights`：识屏、自言自语、提问的抽取权重；某项设为 `0` 就会关闭。
+- `reply_sentence_range`：回复句数范围，可设为 1–8。
+- `fixed_questions`：可自由增删固定问题。
+- `fixed_question_chance`：抽到提问模式时使用固定问题的概率，`0.45` 表示 45%。
+- `common_expressions`：可添加语气词、动作、颜文字或 emoji。
+- `expression_chance`：使用上面表达的概率。
+- `monitor_index`：`-1` 表示沿用 Moondream Vision 的显示器设置。
 
-触发文本不会出现在中央角色对白框。查看方法：聊天窗口右上角设置菜单 → **对话历史记录**。运行日志也会记录 `heartbeat.scheduled` 和 `heartbeat.emitted`。
+插件会尽量避免连续抽到相同的模式、固定问题和表达。如果某个列表只有一项，则只能继续使用这一项。
 
-### 不会写代码也可以修改
+### 常用改法
 
-配置文件只是一个文本文件，不需要修改 Python：
-
-```text
-Shinsekai/data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
-```
-
-1. 用记事本打开 `config.json`。
-2. 修改数字或引号中的文字。
-3. 保存文件；插件通常会在 1 秒内自动读取，不需要重启。
-4. 如果修改的是插件代码或刚更新了插件版本，才需要完整重启 Shinsekai。
-
-编辑 JSON 时只需记住四件事：
-
-- 文字必须放在英文双引号 `"文字"` 中。
-- 同一组里的项目之间要有英文逗号 `,`，最后一项后面不要加逗号。
-- `0.35` 表示 35% 概率；概率允许 `0–1`。
-- JSON 不能写注释。如果暂时写错，插件会继续使用上一份有效配置，修好并再次保存即可。
-
-建议修改前先复制一份 `config.json` 作为备份。
-
-### 常用调整示例
-
-快速测试，每隔 6–12 秒随机触发：
+快速测试（6–12 秒触发一次）：
 
 ```json
 "interval_minutes_range": [0.1, 0.2]
 ```
 
-日常使用，每隔 10–30 分钟随机触发：
-
-```json
-"interval_minutes_range": [10, 30]
-```
-
-完全关闭识屏，只保留自言自语和提问：
+关闭识屏，只保留自言自语和提问：
 
 ```json
 "mode_weights": {
@@ -127,71 +104,24 @@ Shinsekai/data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 }
 ```
 
-让回复在一句到六句之间变化：
-
-```json
-"reply_sentence_range": [1, 6]
-```
-
-添加自己的固定问题时，在上一行末尾补逗号，再加入新文字：
-
-```json
-"fixed_questions": [
-  "今天过得怎么样？",
-  "忙了这么久，要不要休息一下？",
-  "现在有没有什么想和我聊聊的？"
-]
-```
-
-添加动作、语气词、颜文字或 emoji：
-
-```json
-"common_expressions": [
-  "唔……",
-  "（打哈欠）",
-  "(￣▽￣)",
-  "✨"
-]
-```
-
-不想使用固定问题或附加表达时，把对应概率设为 `0`：
+关闭固定问题和附加表达：
 
 ```json
 "fixed_question_chance": 0,
 "expression_chance": 0
 ```
 
+编辑 JSON 时注意：文字使用英文双引号，项目之间使用英文逗号，最后一项后面不要加逗号，也不能写注释。建议修改前先复制一份配置作为备份。配置暂时写错时，插件会继续使用上一份有效配置。
+
 ## 可选识屏
 
-识屏模式依赖单独安装并启用的 [Shinsekai Moondream Vision](https://github.com/RachelForster/Shinsekai-Moondream-Vision)。本插件会寻找它注册的 `moondream_query_screen` 工具，不复制模型代码，也不增加视觉依赖。
+识屏需要另外安装并启用 [Shinsekai Moondream Vision](https://github.com/RachelForster/Shinsekai-Moondream-Vision)。本插件只调用它提供的 `moondream_query_screen` 工具；未安装、模型仍在加载或识屏失败时，会自动改为自言自语或提问。
 
-建议关闭 Moondream Vision 自身的自动监屏触发，只保留插件与识屏工具，避免两个插件同时主动说话。Moondream 缺失、模型仍在加载或推理失败时，本次心跳会立即降级为自言自语或提问。
+建议关闭 Moondream Vision 自带的自动监屏触发，只保留识屏工具，避免两个插件同时主动说话。识屏期间如果用户发了消息，本次心跳会被取消。
 
-视觉推理期间如果用户发了新消息，推理结果会被丢弃，心跳重新计时。
+## 使用说明
 
-## 开发与测试
-
-使用 Shinsekai 2.1.0 自带 Python：
-
-```powershell
-& C:\path\to\Shinsekai\runtime\python.exe -m unittest discover -s tests -v
-```
-
-本插件没有直接的第三方运行时依赖。
-
-## English
-
-Heartbeat Companion lets the current Shinsekai character speak after a random configurable idle interval. Each heartbeat uses weighted random selection between screen context, an in-character monologue, and a time-aware question. JSON pools support fixed questions, expressions, actions, kaomoji, and emoji.
-
-Install the repository as `plugins/heartbeat_companion`, add the manifest entry shown above, restart Shinsekai, and edit the generated JSON configuration. Screen understanding is an optional integration with the separately installed Moondream Vision plugin; failures automatically fall back to a non-visual heartbeat.
-
-User input resets the idle timer. If the user speaks while a screen query is running, that heartbeat is cancelled.
-
-## Publication metadata
-
-- Plugin ID: `io.github.hard_to_tell.heartbeat_companion`
-- Entry: `plugins.heartbeat_companion.plugin:HeartbeatCompanionPlugin`
-- Author: `Hard-to-tell`
-- Repository: `https://github.com/Hard-to-tell/shinsekai-heartbeat`
-- Minimum Shinsekai version: `>=2.1.0`
-- Tags: `heartbeat`, `companion`, `automation`, `vision`
+- 心跳触发文本可在聊天窗口右上角设置菜单的 **对话历史记录** 中查看，不会显示在中央角色对白框。
+- 每次用户消息、角色回复/对白播放完成后，都会重新等待一整个随机间隔。
+- 修改插件代码或更新插件版本后需要重启；只修改 `config.json` 不需要重启。
+- 如需暂时关闭，在配置中把 `"enabled"` 改为 `false`。

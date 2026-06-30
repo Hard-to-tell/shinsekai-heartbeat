@@ -212,6 +212,100 @@ class SchedulerTests(unittest.TestCase):
             finally:
                 scheduler.stop()
 
+    def test_reply_tracking_blocks_until_reply_and_tts_finish(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 0.1,
+                    "mode_weights": {"screen": 0, "monologue": 1, "question": 0},
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            scheduler = HeartbeatScheduler(
+                store, emitted.append, clock=clock, poll_seconds=999
+            )
+            scheduler.enable_reply_tracking(True)
+            scheduler.start()
+            try:
+                clock.advance(6)
+                self.assertTrue(scheduler.tick())
+
+                clock.advance(60)
+                self.assertFalse(scheduler.tick())
+                self.assertEqual(len(emitted), 1)
+
+                scheduler.note_reply_finished()
+                clock.advance(5)
+                self.assertFalse(scheduler.tick())
+                clock.advance(1)
+                self.assertTrue(scheduler.tick())
+                self.assertEqual(len(emitted), 2)
+            finally:
+                scheduler.stop()
+
+    def test_consecutive_modes_questions_and_expressions_do_not_repeat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 0.1,
+                    "mode_weights": {"screen": 0, "monologue": 1, "question": 1},
+                    "fixed_question_chance": 1,
+                    "fixed_questions": ["问题甲", "问题乙"],
+                    "expression_chance": 1,
+                    "common_expressions": ["表情甲", "表情乙"],
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+
+            class FirstAvailableRandom:
+                def uniform(self, low, high):
+                    _ = high
+                    return low
+
+                def choices(self, modes, *, weights, k):
+                    _ = k
+                    return [next(mode for mode, weight in zip(modes, weights) if weight > 0)]
+
+                def randint(self, low, high):
+                    _ = high
+                    return low
+
+                def random(self):
+                    return 0.0
+
+                def choice(self, values):
+                    return values[0]
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                clock=clock,
+                rng=FirstAvailableRandom(),
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                for _ in range(4):
+                    clock.advance(6)
+                    self.assertTrue(scheduler.tick())
+
+                self.assertIn("心跳·自言自语", emitted[0])
+                self.assertIn("心跳·主动提问", emitted[1])
+                self.assertIn("心跳·自言自语", emitted[2])
+                self.assertIn("心跳·主动提问", emitted[3])
+                self.assertIn("问题甲", emitted[1])
+                self.assertIn("问题乙", emitted[3])
+                self.assertIn("表情甲", emitted[0])
+                self.assertIn("表情乙", emitted[1])
+                self.assertIn("表情甲", emitted[2])
+                self.assertIn("表情乙", emitted[3])
+            finally:
+                scheduler.stop()
+
 
 if __name__ == "__main__":
     unittest.main()
