@@ -94,6 +94,20 @@ class SchedulerTests(unittest.TestCase):
                     _ = weights, k
                     return ["screen" if "screen" in modes else "question"]
 
+                def uniform(self, low, high):
+                    _ = high
+                    return low
+
+                def randint(self, low, high):
+                    _ = high
+                    return low
+
+                def random(self):
+                    return 1.0
+
+                def choice(self, values):
+                    return values[0]
+
             scheduler = HeartbeatScheduler(
                 store,
                 emitted.append,
@@ -107,6 +121,61 @@ class SchedulerTests(unittest.TestCase):
                 clock.advance(6)
                 self.assertTrue(scheduler.tick())
                 self.assertIn("心跳·主动提问", emitted[0])
+            finally:
+                scheduler.stop()
+
+    def test_random_interval_length_fixed_question_and_expression(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes_range": [5, 15],
+                    "mode_weights": {"screen": 0, "monologue": 0, "question": 1},
+                    "reply_sentence_range": [1, 4],
+                    "fixed_question_chance": 1,
+                    "fixed_questions": ["这么晚了，为什么还不睡？"],
+                    "expression_chance": 1,
+                    "common_expressions": ["（打哈欠）"],
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+
+            class MaximumRandom:
+                def uniform(self, low, high):
+                    _ = low
+                    return high
+
+                def choices(self, modes, *, weights, k):
+                    _ = weights, k
+                    return [modes[-1]]
+
+                def randint(self, low, high):
+                    _ = low
+                    return high
+
+                def random(self):
+                    return 0.0
+
+                def choice(self, values):
+                    return values[0]
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                clock=clock,
+                rng=MaximumRandom(),
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                clock.advance(899)
+                self.assertFalse(scheduler.tick())
+                clock.advance(1)
+                self.assertTrue(scheduler.tick())
+                self.assertIn("这么晚了，为什么还不睡？", emitted[0])
+                self.assertIn("大约说 4 句", emitted[0])
+                self.assertIn("（打哈欠）", emitted[0])
             finally:
                 scheduler.stop()
 

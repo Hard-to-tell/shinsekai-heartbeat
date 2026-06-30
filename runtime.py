@@ -29,7 +29,7 @@ def configure(plugin_root: Path) -> None:
         extra={
             "event": "heartbeat.initialized",
             "enabled": config.enabled,
-            "interval_minutes": config.interval_minutes,
+            "interval_minutes_range": config.interval_minutes_range,
         },
     )
 

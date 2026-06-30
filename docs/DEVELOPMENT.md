@@ -10,7 +10,7 @@ Install or link this repository as:
 
 Add the manifest entry from the README, restart Shinsekai, and confirm that the generated data file appears under `data/plugins/io.github.hard_to_tell.heartbeat_companion/`.
 
-For a quick test, temporarily set `interval_minutes` to `0.1`. Restore a normal value before release.
+For a quick test, temporarily set `interval_minutes_range` to `[0.1, 0.2]`. Restore a normal range before release.
 
 ## Verification
 

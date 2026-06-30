@@ -8,7 +8,7 @@
 
 用户发送任何正常消息后，下一次心跳会重新等待完整间隔。
 
-> Target: Shinsekai 2.1.0+ · Version: 0.1.0 · License: MIT
+> Target: Shinsekai 2.1.0+ · Version: 0.2.0 · License: MIT
 
 ## 安装
 
@@ -38,26 +38,48 @@ data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 ```json
 {
   "enabled": true,
-  "interval_minutes": 10,
+  "interval_minutes_range": [5, 15],
   "mode_weights": {
     "screen": 50,
     "monologue": 25,
     "question": 25
   },
+  "reply_sentence_range": [1, 4],
   "monitor_index": -1,
   "screen_question": "In one short sentence, describe what the user appears to be doing on screen.",
-  "monologue_instruction": "Keep the current character persona and naturally say one or two short sentences.",
-  "question_instruction": "Considering the current local time, naturally ask the user one short question."
+  "monologue_instruction": "Keep the current character persona and say something naturally.",
+  "question_instruction": "Considering the current local time, naturally ask the user a question.",
+  "fixed_question_chance": 0.45,
+  "fixed_questions": [
+    "这么晚了，为什么还不睡？",
+    "今天过得怎么样？",
+    "你现在在忙什么呢？"
+  ],
+  "expression_chance": 0.35,
+  "common_expressions": [
+    "唔……",
+    "嗯哼～",
+    "（轻轻叹气）",
+    "😊"
+  ]
 }
 ```
 
-- `interval_minutes`：允许 `0.1–1440`，默认 10 分钟。
+- `interval_minutes_range`：每轮从最小值到最大值之间随机抽取分钟数，默认 5–15 分钟。
+- `interval_minutes`：旧版固定间隔字段仍兼容；使用新随机区间时删除它。
 - `mode_weights`：三个非负权重；设为 `0` 可关闭对应模式。
+- `reply_sentence_range`：随机目标句数，允许 1–8。
 - `monitor_index`：`-1` 沿用 Moondream Vision 设置；也可指定显示器序号。
+- `fixed_questions`：问题模式可抽取的固定问题；可自由增删字符串。
+- `fixed_question_chance`：使用固定问题的概率，`0` 表示不用，`1` 表示每次都用。
+- `common_expressions`：可填写语气词、动作描写、颜文字或 emoji。
+- `expression_chance`：每轮提示角色自然融入常用表达的概率。
 - 全部权重为 `0` 时自动使用自言自语。
 - JSON 暂时写坏时会保留上一份有效配置，修正并保存即可。
 
 心跳触发会作为一条简短用户消息显示在聊天记录中，角色回复继续使用当前 LLM、聊天窗和 TTS。
+
+触发文本不会出现在中央角色对白框。查看方法：聊天窗口右上角设置菜单 → **对话历史记录**。运行日志也会记录 `heartbeat.scheduled` 和 `heartbeat.emitted`。
 
 ## 可选识屏
 
@@ -79,7 +101,7 @@ data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 
 ## English
 
-Heartbeat Companion lets the current Shinsekai character speak after the user has been idle for a configurable period. Each heartbeat uses weighted random selection between screen context, a short in-character monologue, and a time-aware question.
+Heartbeat Companion lets the current Shinsekai character speak after a random configurable idle interval. Each heartbeat uses weighted random selection between screen context, an in-character monologue, and a time-aware question. JSON pools support fixed questions, expressions, actions, kaomoji, and emoji.
 
 Install the repository as `plugins/heartbeat_companion`, add the manifest entry shown above, restart Shinsekai, and edit the generated JSON configuration. Screen understanding is an optional integration with the separately installed Moondream Vision plugin; failures automatically fall back to a non-visual heartbeat.
 

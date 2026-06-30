@@ -45,6 +45,9 @@ class HeartbeatScheduler:
         self._last_activity_at = self._clock()
         self._activity_generation = 0
         self._was_enabled: bool | None = None
+        self._needs_reschedule = True
+        self._scheduled_range: tuple[float, float] | None = None
+        self._next_due_at: float | None = None
 
     def start(self) -> None:
         with self._lock:
@@ -52,6 +55,7 @@ class HeartbeatScheduler:
                 return
             self._active = True
             self._last_activity_at = self._clock()
+            self._needs_reschedule = True
             self._stop_event.clear()
             self._thread = threading.Thread(
                 target=self._run,
@@ -73,6 +77,7 @@ class HeartbeatScheduler:
         with self._lock:
             self._last_activity_at = self._clock()
             self._activity_generation += 1
+            self._needs_reschedule = True
 
     def tick(self) -> bool:
         """Run one scheduler check; returns True when a heartbeat was emitted."""
@@ -85,19 +90,22 @@ class HeartbeatScheduler:
         if self._was_enabled is False:
             with self._lock:
                 self._last_activity_at = now
+                self._needs_reschedule = True
             self._was_enabled = True
             return False
         self._was_enabled = True
+
+        self._ensure_schedule(config)
 
         with self._lock:
             if not self._active:
                 return False
             activity_at = self._last_activity_at
             generation = self._activity_generation
+            next_due_at = self._next_due_at
 
-        interval_seconds = config.interval_minutes * 60.0
         idle_seconds = max(0.0, now - activity_at)
-        if idle_seconds < interval_seconds:
+        if next_due_at is None or now < next_due_at:
             return False
 
         mode = self._choose_mode(config)
@@ -118,6 +126,7 @@ class HeartbeatScheduler:
             mode=mode,
             screen_summary=screen_summary,
             idle_seconds=idle_seconds,
+            sentence_count=self._rng.randint(*config.reply_sentence_range),
         )
         try:
             self._emit_user_text(message)
@@ -130,6 +139,7 @@ class HeartbeatScheduler:
 
         with self._lock:
             self._last_activity_at = max(self._last_activity_at, now)
+            self._needs_reschedule = True
         logger.info(
             "Heartbeat emitted",
             extra={"event": "heartbeat.emitted", "mode": mode},
@@ -153,6 +163,26 @@ class HeartbeatScheduler:
             return "monologue"
         return self._rng.choices(modes, weights=weights, k=1)[0]
 
+    def _ensure_schedule(self, config: HeartbeatConfig) -> None:
+        with self._lock:
+            if (
+                not self._needs_reschedule
+                and self._scheduled_range == config.interval_minutes_range
+            ):
+                return
+            low, high = config.interval_minutes_range
+            interval = self._rng.uniform(low, high)
+            self._next_due_at = self._last_activity_at + interval * 60.0
+            self._scheduled_range = config.interval_minutes_range
+            self._needs_reschedule = False
+        logger.info(
+            "Next heartbeat scheduled",
+            extra={
+                "event": "heartbeat.scheduled",
+                "interval_minutes": round(interval, 3),
+            },
+        )
+
     def _build_message(
         self,
         config: HeartbeatConfig,
@@ -160,18 +190,32 @@ class HeartbeatScheduler:
         mode: str,
         screen_summary: str | None,
         idle_seconds: float,
+        sentence_count: int,
     ) -> str:
         local_time = self._wall_clock().strftime("%H:%M")
         idle_minutes = _format_minutes(idle_seconds / 60.0)
         prefix = f"[心跳·{_mode_label(mode)} {local_time}，已安静 {idle_minutes} 分钟]"
-        ending = "请保持当前角色设定，用当前对话语言自然回应 1–2 句，不要解释心跳机制。"
+        ending = (
+            f"请保持当前角色设定，用当前对话语言自然回应；这次大约说 {sentence_count} 句，"
+            "自然优先，不要解释心跳机制。"
+        )
+
+        expression_hint = ""
+        if config.common_expressions and self._rng.random() < config.expression_chance:
+            expression = self._rng.choice(config.common_expressions)
+            expression_hint = f" 可以自然融入这个表达或表情：{expression}；不要生硬堆砌。"
 
         if mode == "screen" and screen_summary:
-            return f"{prefix} 屏幕摘要：{screen_summary}。{ending}"
-        instruction = (
-            config.question_instruction if mode == "question" else config.monologue_instruction
-        )
-        return f"{prefix} {instruction} {ending}"
+            return f"{prefix} 屏幕摘要：{screen_summary}。{ending}{expression_hint}"
+        if mode == "question":
+            if config.fixed_questions and self._rng.random() < config.fixed_question_chance:
+                question = self._rng.choice(config.fixed_questions)
+                instruction = f"请按当前角色口吻自然地问用户这个问题，可以适当改写：{question}"
+            else:
+                instruction = config.question_instruction
+        else:
+            instruction = config.monologue_instruction
+        return f"{prefix} {instruction} {ending}{expression_hint}"
 
 
 def _mode_label(mode: str) -> str:

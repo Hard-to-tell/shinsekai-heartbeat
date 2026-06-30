@@ -18,26 +18,48 @@ logger = get_logger(__name__, plugin_id=PLUGIN_ID)
 @dataclass(frozen=True)
 class HeartbeatConfig:
     enabled: bool = True
-    interval_minutes: float = 10.0
+    interval_minutes_range: tuple[float, float] = (5.0, 15.0)
     mode_weights: dict[str, float] = field(
         default_factory=lambda: {"screen": 50.0, "monologue": 25.0, "question": 25.0}
     )
+    reply_sentence_range: tuple[int, int] = (1, 4)
     monitor_index: int = -1
     screen_question: str = (
         "In one short sentence, describe what the user appears to be doing on screen."
     )
     monologue_instruction: str = (
-        "Keep the current character persona and naturally say one or two short sentences."
+        "Keep the current character persona and say something naturally."
     )
     question_instruction: str = (
-        "Considering the current local time, naturally ask the user one short question."
+        "Considering the current local time, naturally ask the user a question."
+    )
+    fixed_question_chance: float = 0.45
+    fixed_questions: tuple[str, ...] = (
+        "这么晚了，为什么还不睡？",
+        "今天过得怎么样？",
+        "你现在在忙什么呢？",
+    )
+    expression_chance: float = 0.35
+    common_expressions: tuple[str, ...] = (
+        "唔……",
+        "嗯哼～",
+        "（轻轻叹气）",
+        "😊",
     )
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> "HeartbeatConfig":
         defaults = cls()
-        interval = _finite_float(raw.get("interval_minutes"), defaults.interval_minutes)
-        interval = max(0.1, min(1440.0, interval))
+        raw_interval_range = raw.get("interval_minutes_range")
+        if raw_interval_range is None and "interval_minutes" in raw:
+            legacy_interval = _finite_float(raw.get("interval_minutes"), 10.0)
+            raw_interval_range = [legacy_interval, legacy_interval]
+        interval_range = _float_range(
+            raw_interval_range,
+            defaults.interval_minutes_range,
+            minimum=0.1,
+            maximum=1440.0,
+        )
 
         raw_weights = raw.get("mode_weights")
         if not isinstance(raw_weights, Mapping):
@@ -58,8 +80,14 @@ class HeartbeatConfig:
                 if isinstance(raw.get("enabled"), bool)
                 else defaults.enabled
             ),
-            interval_minutes=interval,
+            interval_minutes_range=interval_range,
             mode_weights=weights,
+            reply_sentence_range=_int_range(
+                raw.get("reply_sentence_range"),
+                defaults.reply_sentence_range,
+                minimum=1,
+                maximum=8,
+            ),
             monitor_index=monitor_index,
             screen_question=_text_or_default(
                 raw.get("screen_question"), defaults.screen_question
@@ -69,6 +97,18 @@ class HeartbeatConfig:
             ),
             question_instruction=_text_or_default(
                 raw.get("question_instruction"), defaults.question_instruction
+            ),
+            fixed_question_chance=_probability(
+                raw.get("fixed_question_chance"), defaults.fixed_question_chance
+            ),
+            fixed_questions=_text_list(
+                raw.get("fixed_questions"), defaults.fixed_questions
+            ),
+            expression_chance=_probability(
+                raw.get("expression_chance"), defaults.expression_chance
+            ),
+            common_expressions=_text_list(
+                raw.get("common_expressions"), defaults.common_expressions
             ),
         )
 
@@ -89,6 +129,44 @@ def _integer(value: object, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return int(default)
+
+
+def _float_range(
+    value: object,
+    default: tuple[float, float],
+    *,
+    minimum: float,
+    maximum: float,
+) -> tuple[float, float]:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return default
+    low = max(minimum, min(maximum, _finite_float(value[0], default[0])))
+    high = max(minimum, min(maximum, _finite_float(value[1], default[1])))
+    return (min(low, high), max(low, high))
+
+
+def _int_range(
+    value: object,
+    default: tuple[int, int],
+    *,
+    minimum: int,
+    maximum: int,
+) -> tuple[int, int]:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return default
+    low = max(minimum, min(maximum, _integer(value[0], default[0])))
+    high = max(minimum, min(maximum, _integer(value[1], default[1])))
+    return (min(low, high), max(low, high))
+
+
+def _probability(value: object, default: float) -> float:
+    return max(0.0, min(1.0, _finite_float(value, default)))
+
+
+def _text_list(value: object, default: tuple[str, ...]) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return default
+    return tuple(item.strip() for item in value if isinstance(item, str) and item.strip())
 
 
 def _text_or_default(value: object, default: str) -> str:

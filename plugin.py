@@ -19,7 +19,7 @@ class HeartbeatCompanionPlugin(PluginBase):
 
     @property
     def plugin_version(self) -> str:
-        return "0.1.0"
+        return "0.2.0"
 
     @property
     def plugin_name(self) -> str:
