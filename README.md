@@ -53,7 +53,7 @@ data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
   "fixed_questions": [
     "这么晚了，为什么还不睡？",
     "今天过得怎么样？",
-    "你现在在忙什么呢？"
+    "忙了这么久，要不要休息一下？"
   ],
   "expression_chance": 0.35,
   "common_expressions": [
@@ -80,6 +80,86 @@ data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 心跳触发会作为一条简短用户消息显示在聊天记录中，角色回复继续使用当前 LLM、聊天窗和 TTS。
 
 触发文本不会出现在中央角色对白框。查看方法：聊天窗口右上角设置菜单 → **对话历史记录**。运行日志也会记录 `heartbeat.scheduled` 和 `heartbeat.emitted`。
+
+### 不会写代码也可以修改
+
+配置文件只是一个文本文件，不需要修改 Python：
+
+```text
+Shinsekai/data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
+```
+
+1. 用记事本打开 `config.json`。
+2. 修改数字或引号中的文字。
+3. 保存文件；插件通常会在 1 秒内自动读取，不需要重启。
+4. 如果修改的是插件代码或刚更新了插件版本，才需要完整重启 Shinsekai。
+
+编辑 JSON 时只需记住四件事：
+
+- 文字必须放在英文双引号 `"文字"` 中。
+- 同一组里的项目之间要有英文逗号 `,`，最后一项后面不要加逗号。
+- `0.35` 表示 35% 概率；概率允许 `0–1`。
+- JSON 不能写注释。如果暂时写错，插件会继续使用上一份有效配置，修好并再次保存即可。
+
+建议修改前先复制一份 `config.json` 作为备份。
+
+### 常用调整示例
+
+快速测试，每隔 6–12 秒随机触发：
+
+```json
+"interval_minutes_range": [0.1, 0.2]
+```
+
+日常使用，每隔 10–30 分钟随机触发：
+
+```json
+"interval_minutes_range": [10, 30]
+```
+
+完全关闭识屏，只保留自言自语和提问：
+
+```json
+"mode_weights": {
+  "screen": 0,
+  "monologue": 50,
+  "question": 50
+}
+```
+
+让回复在一句到六句之间变化：
+
+```json
+"reply_sentence_range": [1, 6]
+```
+
+添加自己的固定问题时，在上一行末尾补逗号，再加入新文字：
+
+```json
+"fixed_questions": [
+  "今天过得怎么样？",
+  "忙了这么久，要不要休息一下？",
+  "现在有没有什么想和我聊聊的？"
+]
+```
+
+添加动作、语气词、颜文字或 emoji：
+
+```json
+"common_expressions": [
+  "唔……",
+  "（打哈欠）",
+  "(￣▽￣)",
+  "✨"
+]
+```
+
+不想使用固定问题或附加表达时，把对应概率设为 `0`：
+
+```json
+"fixed_question_chance": 0,
+"expression_chance": 0
+```
 
 ## 可选识屏
 

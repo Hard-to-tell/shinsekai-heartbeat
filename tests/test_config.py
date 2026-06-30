@@ -21,6 +21,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.interval_minutes_range, (5.0, 15.0))
             self.assertEqual(config.mode_weights["screen"], 50.0)
             self.assertTrue(config.fixed_questions)
+            self.assertIn("忙了这么久，要不要休息一下？", config.fixed_questions)
             self.assertTrue(config.common_expressions)
 
     def test_values_are_clamped_and_zero_weights_fall_back(self) -> None:

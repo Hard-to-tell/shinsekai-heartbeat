@@ -37,7 +37,7 @@ class HeartbeatConfig:
     fixed_questions: tuple[str, ...] = (
         "这么晚了，为什么还不睡？",
         "今天过得怎么样？",
-        "你现在在忙什么呢？",
+        "忙了这么久，要不要休息一下？",
     )
     expression_chance: float = 0.35
     common_expressions: tuple[str, ...] = (
