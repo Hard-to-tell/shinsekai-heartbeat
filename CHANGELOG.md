@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 - Unreleased
+
+- Add a Shinsekai plugin configuration page for idle timing, mode weights, prompts, and fixed text pools.
+- Convert user-friendly form values back into the existing hot-reloaded `config.json` format.
+
 ## 0.2.0 - Unreleased
 
 - Draw a new idle interval from a configurable random range after each interaction.

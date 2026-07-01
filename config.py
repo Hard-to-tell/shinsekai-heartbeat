@@ -116,6 +116,93 @@ class HeartbeatConfig:
         return asdict(self)
 
 
+def to_frontend_values(config: HeartbeatConfig) -> dict[str, Any]:
+    interval_min, interval_max = config.interval_minutes_range
+    reply_min, reply_max = config.reply_sentence_range
+    return {
+        "enabled": config.enabled,
+        "interval_min_minutes": interval_min,
+        "interval_max_minutes": interval_max,
+        "screen_weight": config.mode_weights.get("screen", 0.0),
+        "monologue_weight": config.mode_weights.get("monologue", 0.0),
+        "question_weight": config.mode_weights.get("question", 0.0),
+        "reply_min_sentences": reply_min,
+        "reply_max_sentences": reply_max,
+        "monitor_index": config.monitor_index,
+        "screen_question": config.screen_question,
+        "monologue_instruction": config.monologue_instruction,
+        "question_instruction": config.question_instruction,
+        "fixed_question_chance_percent": config.fixed_question_chance * 100.0,
+        "fixed_questions_text": "\n".join(config.fixed_questions),
+        "expression_chance_percent": config.expression_chance * 100.0,
+        "common_expressions_text": "\n".join(config.common_expressions),
+    }
+
+
+def from_frontend_values(values: Mapping[str, Any]) -> HeartbeatConfig:
+    if "interval_min_minutes" not in values and "fixed_questions_text" not in values:
+        return HeartbeatConfig.from_mapping(values)
+
+    defaults = HeartbeatConfig()
+    raw = {
+        "enabled": values.get("enabled", defaults.enabled),
+        "interval_minutes_range": [
+            _finite_float(
+                values.get("interval_min_minutes"),
+                defaults.interval_minutes_range[0],
+            ),
+            _finite_float(
+                values.get("interval_max_minutes"),
+                defaults.interval_minutes_range[1],
+            ),
+        ],
+        "mode_weights": {
+            "screen": _finite_float(
+                values.get("screen_weight"), defaults.mode_weights["screen"]
+            ),
+            "monologue": _finite_float(
+                values.get("monologue_weight"), defaults.mode_weights["monologue"]
+            ),
+            "question": _finite_float(
+                values.get("question_weight"), defaults.mode_weights["question"]
+            ),
+        },
+        "reply_sentence_range": [
+            _integer(
+                values.get("reply_min_sentences"), defaults.reply_sentence_range[0]
+            ),
+            _integer(
+                values.get("reply_max_sentences"), defaults.reply_sentence_range[1]
+            ),
+        ],
+        "monitor_index": values.get("monitor_index", defaults.monitor_index),
+        "screen_question": values.get("screen_question", defaults.screen_question),
+        "monologue_instruction": values.get(
+            "monologue_instruction", defaults.monologue_instruction
+        ),
+        "question_instruction": values.get(
+            "question_instruction", defaults.question_instruction
+        ),
+        "fixed_question_chance": _finite_float(
+            values.get("fixed_question_chance_percent"),
+            defaults.fixed_question_chance * 100.0,
+        )
+        / 100.0,
+        "fixed_questions": _lines_from_text(
+            values.get("fixed_questions_text"), defaults.fixed_questions
+        ),
+        "expression_chance": _finite_float(
+            values.get("expression_chance_percent"),
+            defaults.expression_chance * 100.0,
+        )
+        / 100.0,
+        "common_expressions": _lines_from_text(
+            values.get("common_expressions_text"), defaults.common_expressions
+        ),
+    }
+    return HeartbeatConfig.from_mapping(raw)
+
+
 def _finite_float(value: object, default: float) -> float:
     try:
         number = float(value)
@@ -175,6 +262,16 @@ def _text_or_default(value: object, default: str) -> str:
     return value.strip()
 
 
+def _lines_from_text(value: object, default: tuple[str, ...]) -> list[str]:
+    if value is None:
+        return list(default)
+    if isinstance(value, str):
+        return [line.strip() for line in value.splitlines() if line.strip()]
+    if isinstance(value, list):
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+    return list(default)
+
+
 class ConfigStore:
     """Create and hot-reload the plugin's JSON configuration."""
 
@@ -189,12 +286,15 @@ class ConfigStore:
 
     def initialize(self) -> HeartbeatConfig:
         if not self.path.is_file():
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
-                json.dumps(self._current.to_dict(), ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
+            self.save(self._current)
         return self.get(force=True)
+
+    def save(self, config: HeartbeatConfig) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        text = json.dumps(config.to_dict(), ensure_ascii=False, indent=2) + "\n"
+        self.path.write_text(text, encoding="utf-8")
+        self._current = config
+        self._last_text = text
 
     def get(self, *, force: bool = False) -> HeartbeatConfig:
         try:
