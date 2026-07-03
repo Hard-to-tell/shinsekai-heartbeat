@@ -67,7 +67,7 @@ def process_user_input(text: str) -> str:
         scheduler = _scheduler
     if not is_heartbeat:
         if scheduler is not None:
-            scheduler.note_user_activity()
+            scheduler.note_user_activity(text)
     return text
 
 

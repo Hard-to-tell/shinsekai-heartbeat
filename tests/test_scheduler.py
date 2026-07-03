@@ -212,6 +212,162 @@ class SchedulerTests(unittest.TestCase):
             finally:
                 scheduler.stop()
 
+    def test_short_idle_continues_recent_user_inputs_without_screen(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 0.1,
+                    "mode_weights": {"screen": 1, "monologue": 1, "question": 0},
+                    "monologue_instruction": "Continue naturally.",
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+
+            class FirstWeightedRandom:
+                def uniform(self, low, high):
+                    _ = high
+                    return low
+
+                def choices(self, modes, *, weights, k):
+                    _ = k
+                    return [next(mode for mode, weight in zip(modes, weights) if weight > 0)]
+
+                def randint(self, low, high):
+                    _ = high
+                    return low
+
+                def random(self):
+                    return 1.0
+
+                def choice(self, values):
+                    return values[0]
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                screen_reader=lambda config: "screen should not be used",
+                clock=clock,
+                rng=FirstWeightedRandom(),
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                scheduler.note_user_activity("first")
+                scheduler.note_user_activity("second")
+                scheduler.note_user_activity("third")
+                scheduler.note_user_activity("x" * 200)
+                clock.advance(6)
+
+                self.assertTrue(scheduler.tick())
+                self.assertIn("心跳·自言自语", emitted[0])
+                self.assertIn("空闲时间很短", emitted[0])
+                self.assertNotIn("first", emitted[0])
+                self.assertIn("second", emitted[0])
+                self.assertIn("third", emitted[0])
+                self.assertIn(("x" * 120) + "...", emitted[0])
+            finally:
+                scheduler.stop()
+
+    def test_long_idle_boosts_screen_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 10,
+                    "mode_weights": {"screen": 1, "monologue": 1, "question": 0},
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+
+            class HighestWeightRandom:
+                def uniform(self, low, high):
+                    _ = high
+                    return low
+
+                def choices(self, modes, *, weights, k):
+                    _ = k
+                    return [max(zip(modes, weights), key=lambda item: item[1])[0]]
+
+                def randint(self, low, high):
+                    _ = high
+                    return low
+
+                def random(self):
+                    return 1.0
+
+                def choice(self, values):
+                    return values[0]
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                screen_reader=lambda config: "The user is editing code.",
+                clock=clock,
+                rng=HighestWeightRandom(),
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                clock.advance(600)
+
+                self.assertTrue(scheduler.tick())
+                self.assertIn("心跳·识屏", emitted[0])
+                self.assertIn("用户已经安静较久", emitted[0])
+            finally:
+                scheduler.stop()
+
+    def test_long_idle_raises_fixed_question_chance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 10,
+                    "mode_weights": {"screen": 0, "monologue": 0, "question": 1},
+                    "fixed_question_chance": 0.1,
+                    "fixed_questions": ["还在忙刚才那件事吗？"],
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+
+            class HalfRandom:
+                def uniform(self, low, high):
+                    _ = high
+                    return low
+
+                def choices(self, modes, *, weights, k):
+                    _ = weights, k
+                    return [modes[-1]]
+
+                def randint(self, low, high):
+                    _ = high
+                    return low
+
+                def random(self):
+                    return 0.5
+
+                def choice(self, values):
+                    return values[0]
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                clock=clock,
+                rng=HalfRandom(),
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                clock.advance(600)
+
+                self.assertTrue(scheduler.tick())
+                self.assertIn("还在忙刚才那件事吗？", emitted[0])
+            finally:
+                scheduler.stop()
+
     def test_reply_tracking_blocks_until_reply_and_tts_finish(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = make_store(

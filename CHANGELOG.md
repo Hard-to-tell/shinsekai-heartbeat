@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.3.0 - Unreleased
+## 0.3.1 - Unreleased
+
+- Add short, medium, and long idle policies so short heartbeats continue recent topics while long heartbeats favor screen context and fixed questions.
+- Keep the last three user inputs as trimmed context for heartbeat prompts.
+- Avoid field-level hover descriptions in the settings page to prevent tooltip overlap with the sidebar.
+- Clarify how prompt text areas differ from line-based fixed text pools.
+- Explain prompt separators, language choice, and Moondream's English default in the settings page.
+
+## 0.3.0 - 2026-07-02
 
 - Add a Shinsekai plugin configuration page for idle timing, mode weights, prompts, and fixed text pools.
 - Convert user-friendly form values back into the existing hot-reloaded `config.json` format.

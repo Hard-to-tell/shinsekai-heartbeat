@@ -33,8 +33,8 @@ def _config_field(
         "name": key,
         "type": field_type,
     }
-    if description:
-        field["description"] = description
+    # Field descriptions render as hover tooltips that can overlap the sidebar.
+    _ = description
     if max_value is not None:
         field["max"] = max_value
     if min_value is not None:
@@ -180,13 +180,20 @@ CONFIG_PAGE_SCHEMA = [
     {
         "id": "prompts",
         "title": "Prompts",
-        "description": "These instructions are sent with heartbeat-triggered messages.",
+        "description": (
+            "Each box is one complete instruction. New lines and semicolons do not "
+            "create separate randomly selected prompts."
+        ),
         "fields": [
             _config_field(
                 "screen_question",
                 "Screen question",
                 "textarea",
                 default="In one short sentence, describe what the user appears to be doing on screen.",
+                description=(
+                    "One question sent to Moondream Vision. The English default is "
+                    "recommended for compatibility, but it has no special format."
+                ),
                 span="full",
             ),
             _config_field(
@@ -194,6 +201,10 @@ CONFIG_PAGE_SCHEMA = [
                 "Monologue instruction",
                 "textarea",
                 default="Keep the current character persona and say something naturally.",
+                description=(
+                    "One complete instruction sent to the current chat model. "
+                    "Write it in any language the model understands."
+                ),
                 span="full",
             ),
             _config_field(
@@ -201,6 +212,10 @@ CONFIG_PAGE_SCHEMA = [
                 "Question instruction",
                 "textarea",
                 default="Considering the current local time, naturally ask the user a question.",
+                description=(
+                    "One complete instruction for generating a question. For random "
+                    "ready-made questions, use the fixed question list below."
+                ),
                 span="full",
             ),
         ],
@@ -243,19 +258,15 @@ CONFIG_PAGE_I18N = {
                 "fields": {
                     "enabled": {
                         "label": "启用心跳陪伴",
-                        "description": "关闭后插件不会主动触发角色说话。",
                     },
                     "interval_min_minutes": {
                         "label": "最短空闲时间（分钟）",
-                        "description": "用户停止输入后，最短等待多久才可能触发。",
                     },
                     "interval_max_minutes": {
                         "label": "最长空闲时间（分钟）",
-                        "description": "每次触发后会在最短和最长时间之间随机抽取下一次等待时间。",
                     },
                     "monitor_index": {
                         "label": "显示器索引",
-                        "description": "-1 表示沿用 Moondream Vision 的设置；0-32 可强制指定显示器。",
                     },
                 },
             },
@@ -265,35 +276,39 @@ CONFIG_PAGE_I18N = {
                 "fields": {
                     "screen_weight": {
                         "label": "识屏模式权重",
-                        "description": "可用时结合 Moondream 识屏结果发言。",
                     },
                     "monologue_weight": {
                         "label": "自言自语权重",
-                        "description": "让角色保持人设自然说一句话。",
                     },
                     "question_weight": {
                         "label": "提问模式权重",
-                        "description": "让角色结合当前时间自然问一个问题。",
                     },
                     "reply_min_sentences": {"label": "最少回复句数"},
                     "reply_max_sentences": {"label": "最多回复句数"},
                     "fixed_question_chance_percent": {
                         "label": "使用固定问题概率（%）",
-                        "description": "抽到提问模式后，使用下方固定问题列表的概率。",
                     },
                     "expression_chance_percent": {
                         "label": "附加语气词概率（%）",
-                        "description": "触发时在回复前追加一个常用语气词或动作的概率。",
                     },
                 },
             },
             "prompts": {
                 "title": "提示词",
-                "description": "这些文字会作为心跳触发消息的一部分发送给模型。",
+                "description": (
+                    "每个输入框都是一条完整指令。换行或分号只用于组织文字，整框内容会一起发送，"
+                    "不会像固定文案那样随机拆分。"
+                ),
                 "fields": {
-                    "screen_question": {"label": "识屏问题"},
-                    "monologue_instruction": {"label": "自言自语提示词"},
-                    "question_instruction": {"label": "提问提示词"},
+                    "screen_question": {
+                        "label": "识屏问题",
+                    },
+                    "monologue_instruction": {
+                        "label": "自言自语提示词",
+                    },
+                    "question_instruction": {
+                        "label": "提问提示词",
+                    },
                 },
             },
             "content": {
@@ -322,7 +337,7 @@ class HeartbeatCompanionPlugin(PluginBase):
 
     @property
     def plugin_version(self) -> str:
-        return "0.3.0"
+        return "0.3.1"
 
     @property
     def plugin_name(self) -> str:

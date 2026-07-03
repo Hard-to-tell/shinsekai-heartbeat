@@ -9,11 +9,13 @@ from plugins.heartbeat_companion import runtime
 class FakeScheduler:
     def __init__(self) -> None:
         self.activity_count = 0
+        self.activity_texts: list[str | None] = []
         self.reply_finished_count = 0
         self.reply_tracking: list[bool] = []
 
-    def note_user_activity(self) -> None:
+    def note_user_activity(self, text: str | None = None) -> None:
         self.activity_count += 1
+        self.activity_texts.append(text)
 
     def note_reply_finished(self) -> None:
         self.reply_finished_count += 1
@@ -70,6 +72,7 @@ class RuntimeTests(unittest.TestCase):
         runtime.process_user_input("hello")
 
         self.assertEqual(scheduler.activity_count, 1)
+        self.assertEqual(scheduler.activity_texts, ["hello"])
 
     def test_chat_ui_reply_finished_event_releases_scheduler(self) -> None:
         scheduler = FakeScheduler()
