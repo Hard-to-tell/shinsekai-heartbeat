@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.3.1 - Unreleased
+## 0.3.2 - 2026-07-23
+
+- Cancel a due heartbeat when user activity or shutdown wins the final emission race.
+- Wait for final host reply completion and all queued replies before resuming idle scheduling.
+- Share one thread-safe configuration store between runtime and settings, with atomic file replacement.
+- Add a visible switch for adaptive short/medium/long idle behavior.
+- Test plugin imports against the real Shinsekai 2.1.0 SDK in CI.
+
+## 0.3.1 - 2026-07-03
 
 - Add short, medium, and long idle policies so short heartbeats continue recent topics while long heartbeats favor screen context and fixed questions.
 - Keep the last three user inputs as trimmed context for heartbeat prompts.
@@ -13,7 +21,7 @@
 - Add a Shinsekai plugin configuration page for idle timing, mode weights, prompts, and fixed text pools.
 - Convert user-friendly form values back into the existing hot-reloaded `config.json` format.
 
-## 0.2.0 - Unreleased
+## 0.2.0 - 2026-07-01
 
 - Draw a new idle interval from a configurable random range after each interaction.
 - Randomize the target reply length.

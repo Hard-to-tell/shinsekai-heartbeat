@@ -19,11 +19,9 @@ _config_store: ConfigStore | None = None
 _scheduler: HeartbeatScheduler | None = None
 _reply_tracking_bound = False
 _ui_disconnects: list[Callable[[], None]] = []
-_reply_pending = False
-_character_dialog_seen = False
 
 
-def configure(plugin_root: Path) -> None:
+def configure(plugin_root: Path) -> ConfigStore:
     global _config_store
     store = ConfigStore(Path(plugin_root) / "config.json")
     config = store.initialize()
@@ -37,6 +35,7 @@ def configure(plugin_root: Path) -> None:
             "interval_minutes_range": config.interval_minutes_range,
         },
     )
+    return store
 
 
 def bind_emit(emit_user_text: Callable[[str], None]) -> None:
@@ -59,11 +58,8 @@ def bind_emit(emit_user_text: Callable[[str], None]) -> None:
 
 
 def process_user_input(text: str) -> str:
-    global _reply_pending, _character_dialog_seen
     is_heartbeat = text.startswith(HEARTBEAT_MARKER)
     with _lock:
-        _reply_pending = True
-        _character_dialog_seen = False
         scheduler = _scheduler
     if not is_heartbeat:
         if scheduler is not None:
@@ -81,9 +77,6 @@ def bind_chat_ui(context: Any) -> None:
 
     disconnects = [
         context.on_llm_reply_finished(_on_reply_finished),
-        context.on_display_words_changed(_on_display_words_changed),
-        context.on_dialog_typing_finished(_on_dialog_typing_finished),
-        context.on_skip_speech_signal(_on_reply_finished),
     ]
     with _lock:
         _ui_disconnects = disconnects
@@ -94,41 +87,21 @@ def bind_chat_ui(context: Any) -> None:
 
 
 def _on_reply_finished() -> None:
-    global _reply_pending, _character_dialog_seen
     with _lock:
-        _reply_pending = False
-        _character_dialog_seen = False
         scheduler = _scheduler
     if scheduler is not None:
         scheduler.note_reply_finished()
 
 
-def _on_display_words_changed(text: str) -> None:
-    global _character_dialog_seen
-    normalized = str(text or "").lstrip()
-    with _lock:
-        if _reply_pending and normalized and not normalized.startswith("<b>你</b>"):
-            _character_dialog_seen = True
-
-
-def _on_dialog_typing_finished() -> None:
-    with _lock:
-        character_dialog_seen = _character_dialog_seen
-    if character_dialog_seen:
-        _on_reply_finished()
-
-
 def shutdown() -> None:
-    global _scheduler, _reply_tracking_bound, _ui_disconnects
-    global _reply_pending, _character_dialog_seen
+    global _config_store, _scheduler, _reply_tracking_bound, _ui_disconnects
     with _lock:
         scheduler = _scheduler
+        _config_store = None
         _scheduler = None
         disconnects = _ui_disconnects
         _ui_disconnects = []
         _reply_tracking_bound = False
-        _reply_pending = False
-        _character_dialog_seen = False
     for disconnect in disconnects:
         disconnect()
     if scheduler is not None:

@@ -9,8 +9,8 @@ from sdk.plugin_host_context import PluginHostContext
 from sdk.register import PluginCapabilityRegistry
 from sdk.types import ChatUIContribution, FrontendConfigContribution
 
-from . import runtime
-from .config import ConfigStore, PLUGIN_ID, from_frontend_values, to_frontend_values
+from . import __version__, runtime
+from .config import PLUGIN_ID, from_frontend_values, to_frontend_values
 
 
 def _config_field(
@@ -52,7 +52,10 @@ CONFIG_PAGE_SCHEMA = [
     {
         "id": "general",
         "title": "General",
-        "description": "Enable the idle heartbeat and choose when it may speak.",
+        "description": (
+            "Enable the idle heartbeat, choose when it may speak, and optionally "
+            "adapt behavior to the idle duration."
+        ),
         "fields": [
             _config_field(
                 "enabled",
@@ -81,6 +84,17 @@ CONFIG_PAGE_SCHEMA = [
                 max_value=1440.0,
                 min_value=0.1,
                 step=0.1,
+            ),
+            _config_field(
+                "adaptive_idle_policy",
+                "Adapt behavior to idle duration",
+                "boolean",
+                default=True,
+                description=(
+                    "Short idle periods favor recent conversation while long idle "
+                    "periods favor screen context and fixed questions."
+                ),
+                span="full",
             ),
             _config_field(
                 "monitor_index",
@@ -254,7 +268,10 @@ CONFIG_PAGE_I18N = {
         "groups": {
             "general": {
                 "title": "基础设置",
-                "description": "控制插件是否启用，以及空闲多久后允许角色主动开口。",
+                "description": (
+                    "控制插件是否启用、空闲多久后允许角色主动开口，以及是否根据空闲时长"
+                    "自动调整模式。"
+                ),
                 "fields": {
                     "enabled": {
                         "label": "启用心跳陪伴",
@@ -264,6 +281,9 @@ CONFIG_PAGE_I18N = {
                     },
                     "interval_max_minutes": {
                         "label": "最长空闲时间（分钟）",
+                    },
+                    "adaptive_idle_policy": {
+                        "label": "根据空闲时长自动调整模式",
                     },
                     "monitor_index": {
                         "label": "显示器索引",
@@ -337,7 +357,7 @@ class HeartbeatCompanionPlugin(PluginBase):
 
     @property
     def plugin_version(self) -> str:
-        return "0.3.1"
+        return __version__
 
     @property
     def plugin_name(self) -> str:
@@ -362,11 +382,9 @@ class HeartbeatCompanionPlugin(PluginBase):
         host: PluginHostContext,
     ) -> None:
         _ = host
-        runtime.configure(plugin_root)
+        config_store = runtime.configure(plugin_root)
         register.register_user_input_processor(runtime.process_user_input)
         register.register_user_input_trigger(runtime.bind_emit)
-
-        config_store = ConfigStore(plugin_root / "config.json")
 
         def load_config_values():
             return to_frontend_values(config_store.get(force=True))

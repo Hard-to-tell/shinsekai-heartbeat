@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from tests import _bootstrap  # noqa: F401
 from plugins.heartbeat_companion import runtime
@@ -30,28 +32,10 @@ class FakeScheduler:
 class FakeChatUIContext:
     def __init__(self) -> None:
         self.reply_handler = None
-        self.display_handler = None
-        self.typing_handler = None
-        self.skip_handler = None
         self.disconnect_count = 0
 
     def on_llm_reply_finished(self, handler):
         self.reply_handler = handler
-
-        return self._disconnect
-
-    def on_dialog_typing_finished(self, handler):
-        self.typing_handler = handler
-
-        return self._disconnect
-
-    def on_display_words_changed(self, handler):
-        self.display_handler = handler
-
-        return self._disconnect
-
-    def on_skip_speech_signal(self, handler):
-        self.skip_handler = handler
 
         return self._disconnect
 
@@ -74,7 +58,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(scheduler.activity_count, 1)
         self.assertEqual(scheduler.activity_texts, ["hello"])
 
-    def test_chat_ui_reply_finished_event_releases_scheduler(self) -> None:
+    def test_configure_returns_the_runtime_config_store(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = runtime.configure(Path(tmp))
+
+            with runtime._lock:
+                self.assertIs(runtime._config_store, store)
+
+    def test_only_final_reply_event_releases_scheduler(self) -> None:
         scheduler = FakeScheduler()
         context = FakeChatUIContext()
         with runtime._lock:
@@ -84,24 +75,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(scheduler.reply_tracking, [True])
 
         runtime.process_user_input("hello")
-        context.display_handler("<b>你</b>：hello")
-        context.typing_handler()
         self.assertEqual(scheduler.reply_finished_count, 0)
 
-        context.display_handler("<b>角色</b>：你好")
-        context.typing_handler()
+        context.reply_handler()
         self.assertEqual(scheduler.reply_finished_count, 1)
 
-        runtime.process_user_input("hello again")
-        context.reply_handler()
-        self.assertEqual(scheduler.reply_finished_count, 2)
-
-        runtime.process_user_input("one more")
-        context.skip_handler()
-        self.assertEqual(scheduler.reply_finished_count, 3)
-
         runtime.shutdown()
-        self.assertEqual(context.disconnect_count, 4)
+        self.assertEqual(context.disconnect_count, 1)
         self.assertEqual(scheduler.reply_tracking, [True, False])
 
 

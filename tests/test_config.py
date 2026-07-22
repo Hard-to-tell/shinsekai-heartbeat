@@ -23,7 +23,9 @@ class ConfigTests(unittest.TestCase):
             config = store.initialize()
 
             self.assertTrue(path.is_file())
+            self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
             self.assertEqual(config.interval_minutes_range, (5.0, 15.0))
+            self.assertTrue(config.adaptive_idle_policy)
             self.assertEqual(config.mode_weights["screen"], 50.0)
             self.assertTrue(config.fixed_questions)
             self.assertIn("忙了这么久，要不要休息一下？", config.fixed_questions)
@@ -86,6 +88,7 @@ class ConfigTests(unittest.TestCase):
         config = HeartbeatConfig(
             interval_minutes_range=(2.5, 9.0),
             mode_weights={"screen": 10.0, "monologue": 30.0, "question": 60.0},
+            adaptive_idle_policy=False,
             reply_sentence_range=(2, 5),
             fixed_question_chance=0.25,
             fixed_questions=("question one", "question two"),
@@ -98,6 +101,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(values["interval_min_minutes"], 2.5)
         self.assertEqual(values["interval_max_minutes"], 9.0)
         self.assertEqual(values["screen_weight"], 10.0)
+        self.assertFalse(values["adaptive_idle_policy"])
         self.assertEqual(values["fixed_question_chance_percent"], 25.0)
         self.assertEqual(values["expression_chance_percent"], 80.0)
         self.assertEqual(values["fixed_questions_text"], "question one\nquestion two")
@@ -112,6 +116,7 @@ class ConfigTests(unittest.TestCase):
                 "screen_weight": 0,
                 "monologue_weight": 70,
                 "question_weight": 30,
+                "adaptive_idle_policy": False,
                 "reply_min_sentences": 6,
                 "reply_max_sentences": 2,
                 "monitor_index": 3,
@@ -129,6 +134,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.interval_minutes_range, (10.0, 30.0))
         self.assertEqual(config.mode_weights["screen"], 0.0)
         self.assertEqual(config.mode_weights["monologue"], 70.0)
+        self.assertFalse(config.adaptive_idle_policy)
         self.assertEqual(config.reply_sentence_range, (2, 6))
         self.assertEqual(config.monitor_index, 3)
         self.assertEqual(config.fixed_question_chance, 0.25)

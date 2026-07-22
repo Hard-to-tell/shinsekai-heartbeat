@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import tempfile
+import threading
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -19,6 +22,7 @@ logger = get_logger(__name__, plugin_id=PLUGIN_ID)
 class HeartbeatConfig:
     enabled: bool = True
     interval_minutes_range: tuple[float, float] = (5.0, 15.0)
+    adaptive_idle_policy: bool = True
     mode_weights: dict[str, float] = field(
         default_factory=lambda: {"screen": 50.0, "monologue": 25.0, "question": 25.0}
     )
@@ -81,6 +85,11 @@ class HeartbeatConfig:
                 else defaults.enabled
             ),
             interval_minutes_range=interval_range,
+            adaptive_idle_policy=(
+                raw.get("adaptive_idle_policy")
+                if isinstance(raw.get("adaptive_idle_policy"), bool)
+                else defaults.adaptive_idle_policy
+            ),
             mode_weights=weights,
             reply_sentence_range=_int_range(
                 raw.get("reply_sentence_range"),
@@ -123,6 +132,7 @@ def to_frontend_values(config: HeartbeatConfig) -> dict[str, Any]:
         "enabled": config.enabled,
         "interval_min_minutes": interval_min,
         "interval_max_minutes": interval_max,
+        "adaptive_idle_policy": config.adaptive_idle_policy,
         "screen_weight": config.mode_weights.get("screen", 0.0),
         "monologue_weight": config.mode_weights.get("monologue", 0.0),
         "question_weight": config.mode_weights.get("question", 0.0),
@@ -156,6 +166,9 @@ def from_frontend_values(values: Mapping[str, Any]) -> HeartbeatConfig:
                 defaults.interval_minutes_range[1],
             ),
         ],
+        "adaptive_idle_policy": values.get(
+            "adaptive_idle_policy", defaults.adaptive_idle_policy
+        ),
         "mode_weights": {
             "screen": _finite_float(
                 values.get("screen_weight"), defaults.mode_weights["screen"]
@@ -279,42 +292,64 @@ class ConfigStore:
         self.path = Path(path)
         self._current = HeartbeatConfig()
         self._last_text: str | None = None
+        self._lock = threading.RLock()
 
     @property
     def current(self) -> HeartbeatConfig:
-        return self._current
+        with self._lock:
+            return self._current
 
     def initialize(self) -> HeartbeatConfig:
-        if not self.path.is_file():
-            self.save(self._current)
-        return self.get(force=True)
+        with self._lock:
+            if not self.path.is_file():
+                self.save(self._current)
+            return self.get(force=True)
 
     def save(self, config: HeartbeatConfig) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        text = json.dumps(config.to_dict(), ensure_ascii=False, indent=2) + "\n"
-        self.path.write_text(text, encoding="utf-8")
-        self._current = config
-        self._last_text = text
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            text = json.dumps(config.to_dict(), ensure_ascii=False, indent=2) + "\n"
+            temp_path: Path | None = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    "w",
+                    encoding="utf-8",
+                    dir=self.path.parent,
+                    prefix=f".{self.path.name}.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as handle:
+                    handle.write(text)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                    temp_path = Path(handle.name)
+                os.replace(temp_path, self.path)
+            finally:
+                if temp_path is not None and temp_path.exists():
+                    temp_path.unlink()
+            self._current = config
+            self._last_text = text
 
     def get(self, *, force: bool = False) -> HeartbeatConfig:
-        try:
-            text = self.path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            return self._current
+        with self._lock:
+            try:
+                text = self.path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                return self._current
 
-        if not force and self._last_text == text:
-            return self._current
-        self._last_text = text
+            if not force and self._last_text == text:
+                return self._current
+            self._last_text = text
 
-        try:
-            raw = json.loads(text)
-            if not isinstance(raw, dict):
-                raise ValueError("configuration root must be a JSON object")
-            self._current = HeartbeatConfig.from_mapping(raw)
-        except (OSError, UnicodeError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            logger.warning(
-                "Keeping the last valid heartbeat configuration: %s",
-                exc,
-                extra={"event": "heartbeat.config.invalid"},
-            )
-        return self._current
+            try:
+                raw = json.loads(text)
+                if not isinstance(raw, dict):
+                    raise ValueError("configuration root must be a JSON object")
+                self._current = HeartbeatConfig.from_mapping(raw)
+            except (OSError, UnicodeError, ValueError, TypeError, json.JSONDecodeError) as exc:
+                logger.warning(
+                    "Keeping the last valid heartbeat configuration: %s",
+                    exc,
+                    extra={"event": "heartbeat.config.invalid"},
+                )
+            return self._current

@@ -18,6 +18,7 @@ Run the standard-library test suite:
 
 ```powershell
 & <Shinsekai>\runtime\python.exe -m unittest discover -s tests -v
+& <Shinsekai>\runtime\python.exe tests\smoke_host_sdk.py <Shinsekai>
 ```
 
 Manual checks:
@@ -31,7 +32,7 @@ Manual checks:
 
 ## Release
 
-1. Update `__version__`, `plugin_version`, README, and CHANGELOG together.
+1. Update `__version__`, README, and CHANGELOG together; `plugin_version` reads `__version__` directly.
 2. Run tests and a V2.1.0 integration smoke test.
 3. Commit, push, and create a matching `vX.Y.Z` GitHub release.
 4. Submit `registry-submission.json` through the Shinsekai Plugin Registry publish flow.

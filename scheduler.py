@@ -44,6 +44,7 @@ class HeartbeatScheduler:
         self._rng = rng or random.Random()
         self._poll_seconds = max(0.05, float(poll_seconds))
 
+        self._emit_gate = threading.RLock()
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -57,6 +58,7 @@ class HeartbeatScheduler:
         self._reply_tracking = False
         self._busy = False
         self._busy_since: float | None = None
+        self._pending_replies = 0
         self._last_mode: str | None = None
         self._last_fixed_question: str | None = None
         self._last_expression: str | None = None
@@ -78,26 +80,29 @@ class HeartbeatScheduler:
             self._thread.start()
 
     def stop(self, timeout: float = 5.0) -> None:
-        with self._lock:
-            self._active = False
-            thread = self._thread
-            self._thread = None
-            self._stop_event.set()
+        with self._emit_gate:
+            with self._lock:
+                self._active = False
+                thread = self._thread
+                self._thread = None
+                self._stop_event.set()
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=timeout)
 
     def note_user_activity(self, text: str | None = None) -> None:
-        with self._lock:
-            now = self._clock()
-            self._last_activity_at = now
-            self._activity_generation += 1
-            self._needs_reschedule = True
-            cleaned = _clean_recent_user_input(text)
-            if cleaned:
-                self._recent_user_inputs.append(cleaned)
-            if self._reply_tracking:
-                self._busy = True
-                self._busy_since = now
+        with self._emit_gate:
+            with self._lock:
+                now = self._clock()
+                self._last_activity_at = now
+                self._activity_generation += 1
+                self._needs_reschedule = True
+                cleaned = _clean_recent_user_input(text)
+                if cleaned:
+                    self._recent_user_inputs.append(cleaned)
+                if self._reply_tracking:
+                    self._pending_replies += 1
+                    self._busy = True
+                    self._busy_since = now
 
     def enable_reply_tracking(self, enabled: bool = True) -> None:
         with self._lock:
@@ -105,10 +110,16 @@ class HeartbeatScheduler:
             if not self._reply_tracking:
                 self._busy = False
                 self._busy_since = None
+                self._pending_replies = 0
 
     def note_reply_finished(self) -> None:
         with self._lock:
             if not self._reply_tracking:
+                return
+            if self._pending_replies <= 0:
+                return
+            self._pending_replies -= 1
+            if self._pending_replies > 0:
                 return
             self._busy = False
             self._busy_since = None
@@ -136,6 +147,7 @@ class HeartbeatScheduler:
             with self._lock:
                 self._busy = False
                 self._busy_since = None
+                self._pending_replies = 0
                 self._last_activity_at = now
                 self._activity_generation += 1
                 self._needs_reschedule = True
@@ -193,27 +205,36 @@ class HeartbeatScheduler:
             recent_user_inputs=recent_user_inputs,
             sentence_count=self._rng.randint(*config.reply_sentence_range),
         )
-        with self._lock:
-            if self._reply_tracking:
-                self._busy = True
-                self._busy_since = now
-        try:
-            self._emit_user_text(message)
-        except Exception:
+        with self._emit_gate:
             with self._lock:
-                self._busy = False
-                self._busy_since = None
-                self._last_activity_at = now
-                self._needs_reschedule = True
-            logger.exception(
-                "Heartbeat input emission failed",
-                extra={"event": "heartbeat.emit.failed"},
-            )
-            return False
-
-        with self._lock:
-            self._last_activity_at = max(self._last_activity_at, now)
-            self._needs_reschedule = True
+                if not self._active or generation != self._activity_generation:
+                    return False
+                if activity_at != self._last_activity_at:
+                    return False
+                if self._reply_tracking:
+                    self._pending_replies += 1
+                    self._busy = True
+                    self._busy_since = now
+            try:
+                self._emit_user_text(message)
+            except Exception:
+                with self._lock:
+                    if self._reply_tracking and self._pending_replies > 0:
+                        self._pending_replies -= 1
+                    self._busy = self._pending_replies > 0
+                    if not self._busy:
+                        self._busy_since = None
+                    self._last_activity_at = now
+                    self._needs_reschedule = True
+                logger.exception(
+                    "Heartbeat input emission failed",
+                    extra={"event": "heartbeat.emit.failed"},
+                )
+                return False
+            else:
+                with self._lock:
+                    self._last_activity_at = max(self._last_activity_at, now)
+                    self._needs_reschedule = True
         self._last_mode = mode
         if fixed_question is not None:
             self._last_fixed_question = fixed_question
@@ -286,7 +307,7 @@ class HeartbeatScheduler:
         idle_minutes = _format_minutes(idle_seconds / 60.0)
         prefix = f"[心跳·{_mode_label(mode)} {local_time}，已安静 {idle_minutes} 分钟]"
         context_hint = _recent_context_hint(recent_user_inputs)
-        policy_hint = _policy_instruction(idle_policy)
+        policy_hint = _policy_instruction(config, idle_policy)
         ending = (
             f"请保持当前角色设定，用当前对话语言自然回应；这次大约说 {sentence_count} 句，"
             "自然优先，不要解释心跳机制。"
@@ -354,6 +375,8 @@ def _idle_policy(idle_seconds: float) -> str:
 
 def _policy_mode_weights(config: HeartbeatConfig, idle_policy: str) -> dict[str, float]:
     weights = {mode: max(0.0, config.mode_weights.get(mode, 0.0)) for mode in config.mode_weights}
+    if not config.adaptive_idle_policy:
+        return weights
     screen = weights.get("screen", 0.0)
     monologue = weights.get("monologue", 0.0)
     question = weights.get("question", 0.0)
@@ -372,6 +395,8 @@ def _policy_mode_weights(config: HeartbeatConfig, idle_policy: str) -> dict[str,
 
 def _policy_fixed_question_chance(config: HeartbeatConfig, idle_policy: str) -> float:
     chance = config.fixed_question_chance
+    if not config.adaptive_idle_policy:
+        return chance
     if chance <= 0.0:
         return 0.0
     if idle_policy == "short":
@@ -381,7 +406,9 @@ def _policy_fixed_question_chance(config: HeartbeatConfig, idle_policy: str) -> 
     return chance
 
 
-def _policy_instruction(idle_policy: str) -> str:
+def _policy_instruction(config: HeartbeatConfig, idle_policy: str) -> str:
+    if not config.adaptive_idle_policy:
+        return "如果最近话题还清楚，优先自然承接；否则再轻度开启新话题。"
     if idle_policy == "short":
         return (
             "这次空闲时间很短，优先延续最近话题；不要突然换到无关寒暄、作息提醒"

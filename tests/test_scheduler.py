@@ -212,6 +212,62 @@ class SchedulerTests(unittest.TestCase):
             finally:
                 scheduler.stop()
 
+    def test_user_activity_during_message_build_cancels_heartbeat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 0.1,
+                    "mode_weights": {"screen": 0, "monologue": 1, "question": 0},
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            scheduler = HeartbeatScheduler(
+                store, emitted.append, clock=clock, poll_seconds=999
+            )
+            scheduler.start()
+            original_build_message = scheduler._build_message
+
+            def build_message(*args, **kwargs):
+                scheduler.note_user_activity("late user input")
+                return original_build_message(*args, **kwargs)
+
+            scheduler._build_message = build_message
+            try:
+                clock.advance(6)
+                self.assertFalse(scheduler.tick())
+                self.assertEqual(emitted, [])
+            finally:
+                scheduler.stop()
+
+    def test_stop_during_message_build_cancels_heartbeat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 0.1,
+                    "mode_weights": {"screen": 0, "monologue": 1, "question": 0},
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            scheduler = HeartbeatScheduler(
+                store, emitted.append, clock=clock, poll_seconds=999
+            )
+            scheduler.start()
+            original_build_message = scheduler._build_message
+
+            def build_message(*args, **kwargs):
+                scheduler.stop(timeout=0)
+                return original_build_message(*args, **kwargs)
+
+            scheduler._build_message = build_message
+            clock.advance(6)
+
+            self.assertFalse(scheduler.tick())
+            self.assertEqual(emitted, [])
+
     def test_short_idle_continues_recent_user_inputs_without_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = make_store(
@@ -267,6 +323,51 @@ class SchedulerTests(unittest.TestCase):
                 self.assertIn("second", emitted[0])
                 self.assertIn("third", emitted[0])
                 self.assertIn(("x" * 120) + "...", emitted[0])
+            finally:
+                scheduler.stop()
+
+    def test_adaptive_idle_policy_can_be_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 0.1,
+                    "adaptive_idle_policy": False,
+                    "mode_weights": {"screen": 1, "monologue": 1, "question": 0},
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+
+            class FirstModeRandom:
+                def uniform(self, low, high):
+                    _ = high
+                    return low
+
+                def choices(self, modes, *, weights, k):
+                    _ = k
+                    return [next(mode for mode, weight in zip(modes, weights) if weight > 0)]
+
+                def randint(self, low, high):
+                    _ = high
+                    return low
+
+                def random(self):
+                    return 1.0
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                screen_reader=lambda config: "The user is reading.",
+                clock=clock,
+                rng=FirstModeRandom(),
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                clock.advance(6)
+                self.assertTrue(scheduler.tick())
+                self.assertIn("心跳·识屏", emitted[0])
             finally:
                 scheduler.stop()
 
@@ -398,6 +499,39 @@ class SchedulerTests(unittest.TestCase):
                 clock.advance(1)
                 self.assertTrue(scheduler.tick())
                 self.assertEqual(len(emitted), 2)
+            finally:
+                scheduler.stop()
+
+    def test_reply_tracking_waits_for_all_pending_replies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 0.1,
+                    "mode_weights": {"screen": 0, "monologue": 1, "question": 0},
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            scheduler = HeartbeatScheduler(
+                store, emitted.append, clock=clock, poll_seconds=999
+            )
+            scheduler.enable_reply_tracking(True)
+            scheduler.start()
+            try:
+                scheduler.note_user_activity("first")
+                scheduler.note_user_activity("second")
+                scheduler.note_reply_finished()
+
+                clock.advance(60)
+                self.assertFalse(scheduler.tick())
+
+                scheduler.note_reply_finished()
+                clock.advance(5)
+                self.assertFalse(scheduler.tick())
+                clock.advance(1)
+                self.assertTrue(scheduler.tick())
+                self.assertEqual(len(emitted), 1)
             finally:
                 scheduler.stop()
 
