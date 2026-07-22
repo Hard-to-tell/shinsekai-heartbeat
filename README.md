@@ -1,150 +1,78 @@
-# 心跳陪伴（Heartbeat Companion）
+# Heartbeat Companion｜心跳陪伴
 
-让 Shinsekai 当前角色在用户空闲一段时间后主动开口。插件会随机选择识屏、自言自语或主动提问模式；用户正常发送消息、角色回复完成、TTS 播放完成后都会重新计时，避免在对话进行中插入新的心跳。
+让 Shinsekai 角色不必等你先开口。
 
-适用于 Shinsekai 2.1.0 及以上版本。插件本身没有额外 Python 运行时依赖。
+你安静一会儿后，角色会自然地接着聊天、主动问候，或结合当前时间和屏幕内容说点什么。你一发消息，它就重新计时；角色还在回复或播放语音时，也不会插队打断。
 
-## 功能
+![角色在浏览网页时主动说话](assets/heartbeat-in-action.png)
 
-- 空闲一段随机时间后，让当前角色主动说话。
-- 支持三种触发模式：识屏、自言自语、主动提问。
-- 支持 Shinsekai 插件配置页，不需要手动编辑 JSON。
-- 配置保存后会写回 `config.json`，通常无需重启即可热加载。
-- 可选调用 Moondream Vision 的 `moondream_query_screen` 工具；未安装或识屏失败时会自动回退到非识屏模式。
-- 会记录最近 2 到 3 条用户输入作为短期上下文，过长内容会自动裁剪。
-- 会按空闲时长调整策略：短空闲优先承接话题，长空闲更倾向识屏或使用固定问题。
-- 避免连续重复相同模式、固定问题或语气词。
-- 角色正在生成回复或播放 TTS 时暂停心跳触发。
+## 能做什么
 
-## 安装
+- 在随机空闲时间后主动说话，不会机械地卡点触发。
+- 在识屏、自言自语、主动提问之间按权重随机选择。
+- 参考最近几条对话和空闲时长，尽量接得上当前话题。
+- 避免连续重复同一种模式、固定问题或语气词。
+- 可选接入 Moondream Vision；没有安装时仍可正常使用其他模式。
 
-### 从插件市场安装
+<p align="center">
+  <img src="assets/time-aware-heartbeat.png" width="420" alt="角色根据深夜时间主动问候">
+</p>
 
-如果 Shinsekai 的插件管理器里已经能看到 Heartbeat Companion，优先直接从插件市场安装。安装后重启 Shinsekai。
+## 三分钟上手
 
-### 手动安装
+要求：Shinsekai 2.1.0 或更高版本。
 
-1. 在本仓库页面点击 **Code -> Download ZIP**，下载后解压。
-2. 打开 Shinsekai 主程序目录里的 `plugins` 文件夹。
-3. 新建文件夹 `heartbeat_companion`，把解压出来的插件文件复制进去。
+1. 打开 Shinsekai 的 **设置 → 插件**。
+2. 在插件市场搜索 **Heartbeat Companion**，点击安装并启用。
+3. 完整重启 Shinsekai。
+4. 回到插件页面，打开 Heartbeat Companion 的配置。
 
-复制完成后应类似：
+插件不要求 Moondream，也没有额外的 Python 依赖。只想让角色偶尔主动说话，保持默认设置就能直接用。
 
-```text
-Shinsekai/
-└─ plugins/
-   └─ heartbeat_companion/
-      ├─ plugin.py
-      ├─ config.py
-      ├─ runtime.py
-      ├─ scheduler.py
-      └─ ...
-```
+<details>
+<summary>插件市场找不到时：手动安装</summary>
 
-4. 打开 `Shinsekai/data/config/plugins.yaml`，在文件末尾加入：
+1. 在本仓库点击 **Code → Download ZIP** 并解压。
+2. 新建 `Shinsekai/plugins/heartbeat_companion/`，把仓库文件复制进去。
+3. 确认 `plugin.py` 直接位于该目录，不要多套一层文件夹。
+4. 在 `Shinsekai/data/config/plugins.yaml` 末尾追加：
 
 ```yaml
 - entry: plugins.heartbeat_companion.plugin:HeartbeatCompanionPlugin
   enabled: true
 ```
 
-不要删除文件里已有的其他插件。保存后完整关闭并重新启动 Shinsekai。
+保存后完整重启 Shinsekai。不要删除 `plugins.yaml` 中已有的其他插件。
 
-首次成功加载后会自动生成配置文件：
+</details>
 
-```text
-Shinsekai/data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
-```
+## 怎么设置
 
-## 配置
+设置页里最常用的是这些：
 
-### 推荐方式：插件配置页
+| 设置 | 怎么填 |
+| --- | --- |
+| 最短 / 最长空闲时间 | 每轮会在两者之间随机等待；日常可先用 `5–15` 分钟 |
+| 三种模式权重 | 数字代表相对概率；某项填 `0` 就会关闭该模式 |
+| 回复句数 | 控制每次大约说几句，建议 `1–4` |
+| 固定问题 | 每行一个问题，触发时随机抽取一条 |
+| 常用语气词 / 动作 | 每行一条，例如 `唔……`、`（打哈欠）`、`😊` |
+| 提示词 | 整个输入框是一条完整指令，可直接写中文；换行不会变成多条随机提示词 |
 
-安装并重启 Shinsekai 后，进入插件管理器，找到 **Heartbeat Companion**，点击配置按钮。配置页提供以下项目：
+想快速确认插件是否工作，可临时把空闲时间改为 `0.1–0.2` 分钟，也就是 6–12 秒。测试结束后再改回正常时间。
 
-- 启用或关闭心跳陪伴。
-- 设置最短和最长空闲时间。
-- 设置识屏、自言自语、提问三种模式的相对权重。
-- 设置回复句数范围。
-- 设置显示器索引。
-- 编辑识屏、自言自语、提问提示词。
-- 编辑固定问题列表和常用语气词/动作列表，每行一条。
-- 设置使用固定问题和附加语气词的概率百分比。
+配置保存后通常立即生效，不需要重启。更新插件代码或版本后才需要重启。
 
-保存后插件会把表单内容转换回原来的 `config.json` 格式。只修改这些配置通常会自动生效；更新插件代码或版本后仍建议重启 Shinsekai。
+<details>
+<summary>我想直接修改 config.json</summary>
 
-提示词输入框和固定文案输入框的含义不同：
-
-- **提示词**：一个输入框代表一条完整的 AI 指令。换行或分号只是排版，整框内容会一起发送，不会随机拆成多条。
-- **固定问题 / 常用语气词**：每行一条，插件触发时按概率随机抽取其中一条。
-- 自言自语和提问提示词可以直接写中文，没有强制的 AI 提示词格式。识屏问题发送给 Moondream Vision，默认英文主要用于兼容性；确认所用模型支持中文时也可以翻译成中文。
-
-### 手动方式：编辑 config.json
-
-也可以直接编辑：
+配置文件位于：
 
 ```text
 Shinsekai/data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 ```
 
-默认结构如下：
-
-```json
-{
-  "enabled": true,
-  "interval_minutes_range": [5, 15],
-  "mode_weights": {
-    "screen": 50,
-    "monologue": 25,
-    "question": 25
-  },
-  "reply_sentence_range": [1, 4],
-  "monitor_index": -1,
-  "screen_question": "In one short sentence, describe what the user appears to be doing on screen.",
-  "monologue_instruction": "Keep the current character persona and say something naturally.",
-  "question_instruction": "Considering the current local time, naturally ask the user a question.",
-  "fixed_question_chance": 0.45,
-  "fixed_questions": [
-    "这么晚了，为什么还不睡？",
-    "今天过得怎么样？",
-    "忙了这么久，要不要休息一下？"
-  ],
-  "expression_chance": 0.35,
-  "common_expressions": [
-    "唔……",
-    "嗯哼~",
-    "（轻轻叹气）",
-    "😊"
-  ]
-}
-```
-
-主要字段：
-
-- `enabled`：是否启用插件。
-- `interval_minutes_range`：随机空闲时间范围，单位是分钟，例如 `[10, 30]`。
-- `mode_weights`：三种模式的抽取权重；某一项设为 `0` 就会关闭该模式。
-- `reply_sentence_range`：请求回复的句数范围。
-- `monitor_index`：`-1` 表示沿用 Moondream Vision 的显示器设置；`0` 到 `32` 可强制指定显示器。
-- `screen_question`：识屏模式发送给 Moondream 的问题。
-- `monologue_instruction`：自言自语模式的提示词。
-- `question_instruction`：提问模式的提示词。
-- `fixed_question_chance`：抽到提问模式时使用固定问题的概率，`0.45` 表示 45%。
-- `fixed_questions`：固定问题列表。
-- `expression_chance`：附加常用语气词或动作的概率。
-- `common_expressions`：常用语气词、动作或 emoji 列表。
-
-编辑 JSON 时请使用英文双引号，项目之间用英文逗号，最后一项后面不要加逗号。配置写错时，插件会继续使用上一份有效配置。
-
-## 常用配置
-
-快速测试，6 到 12 秒触发一次：
-
-```json
-"interval_minutes_range": [0.1, 0.2]
-```
-
-关闭识屏，只保留自言自语和提问：
+例如，只保留自言自语和提问：
 
 ```json
 "mode_weights": {
@@ -154,66 +82,23 @@ Shinsekai/data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 }
 ```
 
-关闭固定问题和附加语气词：
+文字要放在英文双引号中，项目之间使用英文逗号，最后一项后面不要加逗号。JSON 暂时写错时，插件会继续使用上一份有效配置。
 
-```json
-"fixed_question_chance": 0,
-"expression_chance": 0
-```
-
-临时关闭插件：
-
-```json
-"enabled": false
-```
+</details>
 
 ## 可选识屏
 
-识屏需要另外安装并启用 [Shinsekai Moondream Vision](https://github.com/RachelForster/Shinsekai-Moondream-Vision)。Heartbeat Companion 只调用它提供的 `moondream_query_screen` 工具，不会自己保存截图或识屏结果。
+安装并启用 [Shinsekai Moondream Vision](https://github.com/RachelForster/Shinsekai-Moondream-Vision) 后，识屏模式会调用它的 `moondream_query_screen` 工具。识屏不可用或失败时，本次心跳会自动改成自言自语或提问。
 
-如果 Moondream Vision 未安装、模型仍在加载、工具报错或识屏返回为空，本插件会自动改用自言自语或提问模式。
+建议关闭 Moondream 自带的自动监屏触发，只保留识屏工具，避免两个插件同时主动说话。Heartbeat Companion 不保存截图或识屏摘要。
 
-建议关闭 Moondream Vision 自带的自动监屏触发，只保留识屏工具，避免两个插件同时主动说话。
+## 没有触发？
 
-## 使用说明
+- 确认插件已启用，并在安装或更新后完整重启过 Shinsekai。
+- 测试时把空闲时间设为 `0.1–0.2` 分钟，并保持聊天窗口开启。
+- 用户刚发送消息、角色正在回复或 TTS 正在播放时，计时会重新开始。
+- 只关闭识屏模式不会影响自言自语和提问模式。
 
-- 心跳触发文本会进入当前对话流程，继续使用当前角色、LLM、输出解析器、UI 和 TTS 设置。
-- 每次用户发送消息、角色回复完成、TTS 播放结束或跳过语音后，都会重新等待一个完整随机间隔。
-- 如果空闲不到 5 分钟，插件会尽量承接最近几条用户输入，少用识屏和固定问题，避免突然换话题。
-- 如果空闲超过 10 分钟，插件会在用户未关闭相关模式的前提下更倾向识屏和固定问题，适合重新观察当前状态。
-- 插件会尽量避免连续抽到同一个模式、固定问题或语气词；如果列表只有一项，则只能继续使用这一项。
-- 修改配置通常无需重启；修改插件代码或更新版本后需要重启 Shinsekai。
+开发结构与测试方法见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 和 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-## 更新
-
-如果插件目录是 Git 仓库：
-
-```powershell
-git pull
-```
-
-如果想固定到某个发布版本：
-
-```powershell
-git fetch --tags
-git checkout v0.3.0
-```
-
-如果通过 Shinsekai 插件管理器安装，请优先使用插件管理器的更新功能。
-
-## 开发验证
-
-运行标准库测试：
-
-```powershell
-python -m unittest
-```
-
-本仓库还包含：
-
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：插件运行结构说明。
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)：本地集成和发布检查流程。
-
-## License
-
-MIT
+MIT License
