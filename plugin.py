@@ -361,11 +361,11 @@ class HeartbeatCompanionPlugin(PluginBase):
 
     @property
     def plugin_name(self) -> str:
-        return "Heartbeat Companion"
+        return "心跳陪伴 Heartbeat Companion"
 
     @property
     def plugin_description(self) -> str:
-        return "Let the current character speak after the user has been idle."
+        return "让当前角色在你一段时间没有操作后自然地主动开口。"
 
     @property
     def plugin_author(self) -> str:

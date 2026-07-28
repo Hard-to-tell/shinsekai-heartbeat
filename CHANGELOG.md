@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3 - 2026-07-28
+
+- Add a dedicated marketplace icon with a transparent background.
+- Localize the marketplace and installed-plugin name, description, and search guidance for Chinese users.
+
 ## 0.3.2 - 2026-07-23
 
 - Cancel a due heartbeat when user activity or shutdown wins the final emission race.

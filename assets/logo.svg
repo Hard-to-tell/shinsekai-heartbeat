@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Heartbeat Companion icon</title>
+  <description id="description">A heart with a heartbeat line inside a speech bubble.</description>
+
+  <path
+    d="M112 76h288c35.3 0 64 28.7 64 64v196c0 35.3-28.7 64-64 64H265l-88 60 19-60h-84c-35.3 0-64-28.7-64-64V140c0-35.3 28.7-64 64-64Z"
+    fill="#FFF4E6"
+    stroke="#28233F"
+    stroke-linejoin="round"
+    stroke-width="24"
+  />
+
+  <path
+    d="M256 349c-12-9-91-65-91-124 0-38 27-65 64-65 20 0 39 10 51 26 12-16 31-26 51-26 37 0 64 27 64 65 0 59-79 115-91 124-14 10-34 10-48 0Z"
+    fill="#FF667D"
+    stroke="#28233F"
+    stroke-linejoin="round"
+    stroke-width="18"
+  />
+
+  <path
+    d="M151 254h58l22-48 34 96 29-70 19 22h48"
+    fill="none"
+    stroke="#FFF4E6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="14"
+  />
+
+  <path
+    d="m379 118 7 17 17 7-17 7-7 17-7-17-17-7 17-7 7-17Z"
+    fill="#FFC857"
+    stroke="#28233F"
+    stroke-linejoin="round"
+    stroke-width="8"
+  />
+</svg>

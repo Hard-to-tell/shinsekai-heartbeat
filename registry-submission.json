@@ -1,9 +1,9 @@
 {
-  "display_name": "Heartbeat Companion",
-  "desc": "Let the current Shinsekai character speak after the user has been idle, with optional Moondream screen context.",
+  "display_name": "心跳陪伴 Heartbeat Companion",
+  "desc": "让角色在你一段时间没有操作后自然地主动开口，可结合最近对话、当前时间与可选的 Moondream 识屏信息，支持自言自语、主动提问和随机空闲间隔。",
   "author": "Hard-to-tell",
   "repo": "https://github.com/Hard-to-tell/shinsekai-heartbeat",
   "lowest_shinsekai_version": ">=2.1.0",
-  "tags": ["heartbeat", "companion", "automation", "vision"],
+  "tags": ["心跳陪伴", "主动对话", "自动化", "识屏"],
   "social_link": "https://github.com/Hard-to-tell"
 }

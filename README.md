@@ -23,9 +23,9 @@
 要求：Shinsekai 2.1.0 或更高版本。
 
 1. 打开 Shinsekai 的 **设置 → 插件**。
-2. 在插件市场搜索 **Heartbeat Companion**，点击安装并启用。
+2. 在插件市场搜索 **心跳陪伴 Heartbeat Companion**，点击安装并启用。
 3. 完整重启 Shinsekai。
-4. 回到插件页面，打开 Heartbeat Companion 的配置。
+4. 回到插件页面，打开“心跳陪伴 Heartbeat Companion”的配置。
 
 插件不要求 Moondream，也没有额外的 Python 依赖。只想让角色偶尔主动说话，保持默认设置就能直接用。
 
