@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from typing import Any
 
 from sdk.logging import get_logger
@@ -12,8 +13,12 @@ from .config import HeartbeatConfig, PLUGIN_ID
 
 logger = get_logger(__name__, plugin_id=PLUGIN_ID)
 MAX_SCREEN_SUMMARY_CHARS = 300
+STUDY = "study"
+DISTRACTED = "distracted"
+UNCERTAIN = "uncertain"
 
 ToolEntry = tuple[Callable[..., Any], str | None, str | None, str | None, str | None]
+StudyScreenResult = tuple[str, str]
 
 
 def query_screen(
@@ -77,3 +82,28 @@ def query_screen(
 
     summary = " ".join(answer.split())
     return summary[:MAX_SCREEN_SUMMARY_CHARS]
+
+
+def query_study_screen(
+    config: HeartbeatConfig,
+    *,
+    entries: Iterable[ToolEntry] | None = None,
+) -> StudyScreenResult | None:
+    """Classify the visible activity for study mode using the same local screen tool."""
+    summary = query_screen(
+        replace(config, screen_question=config.study_screen_question),
+        entries=entries,
+    )
+    if summary is None:
+        return None
+    return classify_study_screen(summary), summary
+
+
+def classify_study_screen(summary: str) -> str:
+    """Read the leading structured label; ambiguous model output stays silent."""
+    prefix = summary.strip().lstrip("`*#[]()：: -").upper()
+    if prefix.startswith("DISTRACTED") or prefix.startswith("分心"):
+        return DISTRACTED
+    if prefix.startswith("STUDY") or prefix.startswith("学习") or prefix.startswith("专注"):
+        return STUDY
+    return UNCERTAIN

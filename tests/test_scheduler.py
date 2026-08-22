@@ -596,6 +596,154 @@ class SchedulerTests(unittest.TestCase):
             finally:
                 scheduler.stop()
 
+    def test_study_mode_is_silent_while_user_is_studying(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "interval_minutes": 0.1,
+                    "study_check_interval_minutes": 1,
+                    "study_focus_minutes": 25,
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            checks: list[bool] = []
+
+            def study_reader(config):
+                _ = config
+                checks.append(True)
+                return ("study", "STUDY - writing a report")
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                study_screen_reader=study_reader,
+                clock=clock,
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                scheduler.start_study_session()
+                clock.advance(6)
+                self.assertFalse(scheduler.tick())
+                self.assertEqual(checks, [])
+
+                clock.advance(54)
+                self.assertFalse(scheduler.tick())
+                self.assertEqual(checks, [True])
+                self.assertEqual(emitted, [])
+            finally:
+                scheduler.stop()
+
+    def test_repeated_distraction_reminders_escalate_without_abuse(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "study_check_interval_minutes": 1,
+                    "study_focus_minutes": 25,
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                study_screen_reader=lambda config: (
+                    "distracted",
+                    "DISTRACTED - watching unrelated short videos",
+                ),
+                clock=clock,
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                scheduler.start_study_session()
+                for _ in range(4):
+                    clock.advance(60)
+                    self.assertTrue(scheduler.tick())
+
+                self.assertIn("第 1 次分心", emitted[0])
+                self.assertIn("温和但明确", emitted[0])
+                self.assertIn("第 2 次分心", emitted[1])
+                self.assertIn("略带不满", emitted[1])
+                self.assertIn("轻微气话", emitted[2])
+                self.assertIn("不要辱骂或贬低", emitted[2])
+                self.assertIn("真的生气一点", emitted[3])
+                self.assertIn("不得人身攻击", emitted[3])
+            finally:
+                scheduler.stop()
+
+    def test_focus_completion_reminds_break_and_ends_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "study_check_interval_minutes": 5,
+                    "study_focus_minutes": 25,
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                study_screen_reader=lambda config: (_ for _ in ()).throw(
+                    AssertionError("completion should win over the due screen check")
+                ),
+                clock=clock,
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                scheduler.start_study_session()
+                clock.advance(25 * 60)
+
+                self.assertTrue(scheduler.tick())
+                self.assertFalse(scheduler.study_active)
+                self.assertEqual(len(emitted), 1)
+                self.assertIn("心跳·学习完成", emitted[0])
+                self.assertIn("休息 5 分钟", emitted[0])
+            finally:
+                scheduler.stop()
+
+    def test_stopping_during_study_screen_check_cancels_reminder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "study_check_interval_minutes": 1,
+                    "study_focus_minutes": 25,
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            scheduler: HeartbeatScheduler
+
+            def study_reader(config):
+                _ = config
+                scheduler.stop_study_session()
+                return ("distracted", "DISTRACTED - social feed")
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                study_screen_reader=study_reader,
+                clock=clock,
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                scheduler.start_study_session()
+                clock.advance(60)
+
+                self.assertFalse(scheduler.tick())
+                self.assertFalse(scheduler.study_active)
+                self.assertEqual(emitted, [])
+            finally:
+                scheduler.stop()
+
 
 if __name__ == "__main__":
     unittest.main()

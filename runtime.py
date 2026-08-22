@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +20,35 @@ _config_store: ConfigStore | None = None
 _scheduler: HeartbeatScheduler | None = None
 _reply_tracking_bound = False
 _ui_disconnects: list[Callable[[], None]] = []
+
+_STUDY_START_PHRASES = (
+    "我要学习请监督我",
+    "我要学习监督我",
+    "开始学习请监督我",
+    "请监督我学习",
+    "监督我学习",
+    "开启学习模式",
+    "打开学习模式",
+    "开始专注",
+    "开启专注模式",
+    "陪我学习",
+)
+_STUDY_STOP_PHRASES = (
+    "停止监督",
+    "结束监督",
+    "不用监督",
+    "不要监督",
+    "别监督",
+    "关闭学习模式",
+    "退出学习模式",
+    "暂停学习模式",
+    "结束学习",
+    "停止学习",
+    "退出专注",
+    "结束专注",
+    "先休息一下",
+    "我要休息",
+)
 
 
 def configure(plugin_root: Path) -> ConfigStore:
@@ -59,12 +89,28 @@ def bind_emit(emit_user_text: Callable[[str], None]) -> None:
 
 def process_user_input(text: str) -> str:
     is_heartbeat = text.startswith(HEARTBEAT_MARKER)
+    original_text = text
     with _lock:
         scheduler = _scheduler
     if not is_heartbeat:
         if scheduler is not None:
-            scheduler.note_user_activity(text)
+            command = detect_study_command(text)
+            if command == "start":
+                scheduler.start_study_session()
+            elif command == "stop":
+                scheduler.stop_study_session()
+            scheduler.note_user_activity(original_text)
     return text
+
+
+def detect_study_command(text: str) -> str | None:
+    """Recognize explicit Chinese natural-language study mode commands."""
+    compact = re.sub(r"[\W_]+", "", str(text).lower(), flags=re.UNICODE)
+    if any(phrase in compact for phrase in _STUDY_STOP_PHRASES):
+        return "stop"
+    if any(phrase in compact for phrase in _STUDY_START_PHRASES):
+        return "start"
+    return None
 
 
 def bind_chat_ui(context: Any) -> None:

@@ -16,6 +16,11 @@ from sdk.logging import get_logger
 
 PLUGIN_ID = "io.github.hard_to_tell.heartbeat_companion"
 logger = get_logger(__name__, plugin_id=PLUGIN_ID)
+LEGACY_FIXED_QUESTIONS = (
+    "这么晚了，为什么还不睡？",
+    "今天过得怎么样？",
+    "忙了这么久，要不要休息一下？",
+)
 
 
 @dataclass(frozen=True)
@@ -31,6 +36,16 @@ class HeartbeatConfig:
     screen_question: str = (
         "In one short sentence, describe what the user appears to be doing on screen."
     )
+    study_check_interval_minutes: float = 5.0
+    study_focus_minutes: float = 25.0
+    study_screen_question: str = (
+        "Classify the user's visible activity for a study supervision session. "
+        "Reply with exactly one label first: STUDY, DISTRACTED, or UNCERTAIN, then a "
+        "very short reason. STUDY includes reading, writing, coding, coursework, research, "
+        "and educational videos even on entertainment sites. DISTRACTED means clearly "
+        "unrelated entertainment such as casual videos, games, or social feeds. Use "
+        "UNCERTAIN when the evidence is ambiguous."
+    )
     monologue_instruction: str = (
         "Keep the current character persona and say something naturally."
     )
@@ -42,6 +57,18 @@ class HeartbeatConfig:
         "这么晚了，为什么还不睡？",
         "今天过得怎么样？",
         "忙了这么久，要不要休息一下？",
+        "今天有没有一件小事让你觉得挺开心？",
+        "最近在忙什么，愿意讲给我听吗？",
+        "现在最想完成的一件事是什么？",
+        "今天学到什么新东西了吗？",
+        "如果现在能立刻去一个地方，你想去哪？",
+        "最近有没有循环播放的歌？",
+        "今天有好好吃饭吗？",
+        "最近睡得还好吗？",
+        "有什么事情一直放在心里吗？",
+        "要不要一起定个十分钟的小目标？",
+        "最近看到什么有趣的东西了吗？",
+        "现在的心情，如果用天气形容，会是什么？",
     )
     expression_chance: float = 0.35
     common_expressions: tuple[str, ...] = (
@@ -77,6 +104,11 @@ class HeartbeatConfig:
 
         monitor_index = _integer(raw.get("monitor_index"), defaults.monitor_index)
         monitor_index = max(-1, min(32, monitor_index))
+        fixed_questions = _text_list(
+            raw.get("fixed_questions"), defaults.fixed_questions
+        )
+        if fixed_questions == LEGACY_FIXED_QUESTIONS:
+            fixed_questions = defaults.fixed_questions
 
         return cls(
             enabled=(
@@ -101,6 +133,28 @@ class HeartbeatConfig:
             screen_question=_text_or_default(
                 raw.get("screen_question"), defaults.screen_question
             ),
+            study_check_interval_minutes=max(
+                0.5,
+                min(
+                    60.0,
+                    _finite_float(
+                        raw.get("study_check_interval_minutes"),
+                        defaults.study_check_interval_minutes,
+                    ),
+                ),
+            ),
+            study_focus_minutes=max(
+                1.0,
+                min(
+                    240.0,
+                    _finite_float(
+                        raw.get("study_focus_minutes"), defaults.study_focus_minutes
+                    ),
+                ),
+            ),
+            study_screen_question=_text_or_default(
+                raw.get("study_screen_question"), defaults.study_screen_question
+            ),
             monologue_instruction=_text_or_default(
                 raw.get("monologue_instruction"), defaults.monologue_instruction
             ),
@@ -110,9 +164,7 @@ class HeartbeatConfig:
             fixed_question_chance=_probability(
                 raw.get("fixed_question_chance"), defaults.fixed_question_chance
             ),
-            fixed_questions=_text_list(
-                raw.get("fixed_questions"), defaults.fixed_questions
-            ),
+            fixed_questions=fixed_questions,
             expression_chance=_probability(
                 raw.get("expression_chance"), defaults.expression_chance
             ),
@@ -140,6 +192,9 @@ def to_frontend_values(config: HeartbeatConfig) -> dict[str, Any]:
         "reply_max_sentences": reply_max,
         "monitor_index": config.monitor_index,
         "screen_question": config.screen_question,
+        "study_check_interval_minutes": config.study_check_interval_minutes,
+        "study_focus_minutes": config.study_focus_minutes,
+        "study_screen_question": config.study_screen_question,
         "monologue_instruction": config.monologue_instruction,
         "question_instruction": config.question_instruction,
         "fixed_question_chance_percent": config.fixed_question_chance * 100.0,
@@ -190,6 +245,16 @@ def from_frontend_values(values: Mapping[str, Any]) -> HeartbeatConfig:
         ],
         "monitor_index": values.get("monitor_index", defaults.monitor_index),
         "screen_question": values.get("screen_question", defaults.screen_question),
+        "study_check_interval_minutes": _finite_float(
+            values.get("study_check_interval_minutes"),
+            defaults.study_check_interval_minutes,
+        ),
+        "study_focus_minutes": _finite_float(
+            values.get("study_focus_minutes"), defaults.study_focus_minutes
+        ),
+        "study_screen_question": values.get(
+            "study_screen_question", defaults.study_screen_question
+        ),
         "monologue_instruction": values.get(
             "monologue_instruction", defaults.monologue_instruction
         ),

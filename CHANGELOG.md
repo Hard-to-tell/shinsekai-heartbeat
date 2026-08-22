@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 - 2026-08-23
+
+- Add a natural-language study mode: say “我要学习，请监督我” to start a quiet focus session, or ask to stop/休息 to end it.
+- Check the screen at a separate low-frequency interval, stay silent for study or uncertain activity, and only speak for clear distraction.
+- Escalate repeated distraction reminders from gentle to visibly annoyed while explicitly avoiding insults, humiliation, threats, or discriminatory language.
+- End the default 25-minute focus session with a break reminder.
+- Expand the built-in conversation question pool from 3 to 15 prompts.
+- Refresh the plugin and community-registry descriptions around proactive companionship and study supervision.
+
 ## 0.3.3 - 2026-07-28
 
 - Add a dedicated marketplace icon with a transparent background.

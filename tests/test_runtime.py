@@ -14,6 +14,9 @@ class FakeScheduler:
         self.activity_texts: list[str | None] = []
         self.reply_finished_count = 0
         self.reply_tracking: list[bool] = []
+        self.study_start_count = 0
+        self.study_stop_count = 0
+        self.study_was_active = True
 
     def note_user_activity(self, text: str | None = None) -> None:
         self.activity_count += 1
@@ -24,6 +27,14 @@ class FakeScheduler:
 
     def enable_reply_tracking(self, enabled: bool = True) -> None:
         self.reply_tracking.append(enabled)
+
+    def start_study_session(self) -> float:
+        self.study_start_count += 1
+        return 25.0
+
+    def stop_study_session(self) -> bool:
+        self.study_stop_count += 1
+        return self.study_was_active
 
     def stop(self) -> None:
         pass
@@ -64,6 +75,49 @@ class RuntimeTests(unittest.TestCase):
 
             with runtime._lock:
                 self.assertIs(runtime._config_store, store)
+
+    def test_natural_language_starts_study_supervision(self) -> None:
+        scheduler = FakeScheduler()
+        with runtime._lock:
+            runtime._scheduler = scheduler
+
+        processed = runtime.process_user_input("我要学习，请监督我！")
+
+        self.assertEqual(scheduler.study_start_count, 1)
+        self.assertEqual(scheduler.study_stop_count, 0)
+        self.assertEqual(processed, "我要学习，请监督我！")
+        self.assertEqual(scheduler.activity_count, 1)
+
+    def test_natural_language_stops_study_supervision(self) -> None:
+        scheduler = FakeScheduler()
+        with runtime._lock:
+            runtime._scheduler = scheduler
+
+        processed = runtime.process_user_input("我先休息一下，停止监督吧")
+
+        self.assertEqual(scheduler.study_stop_count, 1)
+        self.assertEqual(scheduler.study_start_count, 0)
+        self.assertEqual(processed, "我先休息一下，停止监督吧")
+
+    def test_negative_command_wins_over_embedded_start_words(self) -> None:
+        scheduler = FakeScheduler()
+        with runtime._lock:
+            runtime._scheduler = scheduler
+
+        runtime.process_user_input("不要监督我学习")
+
+        self.assertEqual(scheduler.study_stop_count, 1)
+        self.assertEqual(scheduler.study_start_count, 0)
+
+    def test_general_study_chat_does_not_toggle_mode(self) -> None:
+        scheduler = FakeScheduler()
+        with runtime._lock:
+            runtime._scheduler = scheduler
+
+        runtime.process_user_input("你觉得我今天该学习什么？")
+
+        self.assertEqual(scheduler.study_start_count, 0)
+        self.assertEqual(scheduler.study_stop_count, 0)
 
     def test_only_final_reply_event_releases_scheduler(self) -> None:
         scheduler = FakeScheduler()

@@ -27,7 +27,9 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.interval_minutes_range, (5.0, 15.0))
             self.assertTrue(config.adaptive_idle_policy)
             self.assertEqual(config.mode_weights["screen"], 50.0)
-            self.assertTrue(config.fixed_questions)
+            self.assertEqual(config.study_check_interval_minutes, 5.0)
+            self.assertEqual(config.study_focus_minutes, 25.0)
+            self.assertGreaterEqual(len(config.fixed_questions), 12)
             self.assertIn("忙了这么久，要不要休息一下？", config.fixed_questions)
             self.assertTrue(config.common_expressions)
 
@@ -75,6 +77,8 @@ class ConfigTests(unittest.TestCase):
                 "fixed_questions": ["睡了吗？", "", 123],
                 "expression_chance": -1,
                 "common_expressions": ["✨", "（打哈欠）"],
+                "study_check_interval_minutes": 0,
+                "study_focus_minutes": 999,
             }
         )
 
@@ -83,6 +87,25 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.fixed_questions, ("睡了吗？",))
         self.assertEqual(config.expression_chance, 0.0)
         self.assertEqual(config.common_expressions, ("✨", "（打哈欠）"))
+        self.assertEqual(config.study_check_interval_minutes, 0.5)
+        self.assertEqual(config.study_focus_minutes, 240.0)
+
+    def test_legacy_default_questions_expand_without_overwriting_custom_lists(self) -> None:
+        legacy = HeartbeatConfig.from_mapping(
+            {
+                "fixed_questions": [
+                    "这么晚了，为什么还不睡？",
+                    "今天过得怎么样？",
+                    "忙了这么久，要不要休息一下？",
+                ]
+            }
+        )
+        custom = HeartbeatConfig.from_mapping(
+            {"fixed_questions": ["只保留我自己的问题"]}
+        )
+
+        self.assertGreaterEqual(len(legacy.fixed_questions), 12)
+        self.assertEqual(custom.fixed_questions, ("只保留我自己的问题",))
 
     def test_frontend_values_are_user_friendly(self) -> None:
         config = HeartbeatConfig(
@@ -94,6 +117,8 @@ class ConfigTests(unittest.TestCase):
             fixed_questions=("question one", "question two"),
             expression_chance=0.8,
             common_expressions=("hmm", "smile"),
+            study_check_interval_minutes=7.5,
+            study_focus_minutes=40.0,
         )
 
         values = to_frontend_values(config)
@@ -106,6 +131,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(values["expression_chance_percent"], 80.0)
         self.assertEqual(values["fixed_questions_text"], "question one\nquestion two")
         self.assertEqual(values["common_expressions_text"], "hmm\nsmile")
+        self.assertEqual(values["study_check_interval_minutes"], 7.5)
+        self.assertEqual(values["study_focus_minutes"], 40.0)
 
     def test_frontend_values_save_as_runtime_config(self) -> None:
         config = from_frontend_values(
@@ -127,6 +154,9 @@ class ConfigTests(unittest.TestCase):
                 "fixed_questions_text": "first\n\nsecond\n",
                 "expression_chance_percent": 80,
                 "common_expressions_text": "hmm\nsmile",
+                "study_check_interval_minutes": 8,
+                "study_focus_minutes": 50,
+                "study_screen_question": "Classify study activity.",
             }
         )
 
@@ -141,6 +171,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.fixed_questions, ("first", "second"))
         self.assertEqual(config.expression_chance, 0.8)
         self.assertEqual(config.common_expressions, ("hmm", "smile"))
+        self.assertEqual(config.study_check_interval_minutes, 8.0)
+        self.assertEqual(config.study_focus_minutes, 50.0)
+        self.assertEqual(config.study_screen_question, "Classify study activity.")
 
 
 if __name__ == "__main__":

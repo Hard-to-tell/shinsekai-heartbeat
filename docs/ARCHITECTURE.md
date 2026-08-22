@@ -18,6 +18,13 @@ idle deadline
   -> recheck user activity generation
   -> emit_user_text(...)
   -> Shinsekai LLM -> UI -> TTS
+
+explicit study command
+  -> input processor starts a process-local focus session
+  -> quiet Moondream classification at the configured interval
+  -> STUDY / UNCERTAIN / unavailable: no output
+  -> DISTRACTED: persona-aware reminder with escalating firmness
+  -> focus deadline: break reminder and automatic session stop
 ```
 
 ## Modules
@@ -32,7 +39,7 @@ The scheduler is a single daemon thread. It never calls the host LLM or TTS dire
 
 ## Cross-plugin integration
 
-Moondream Vision is optional. The plugin searches `sdk.tool_registry.registered_tool_entries()` for `moondream_query_screen`. Missing tools, loading models, tool errors, or empty answers all return `None`, causing immediate selection of a non-screen heartbeat mode.
+Moondream Vision is optional. The plugin searches `sdk.tool_registry.registered_tool_entries()` for `moondream_query_screen`. Missing tools, loading models, tool errors, or empty answers all return `None`, causing immediate selection of a non-screen heartbeat mode. In study mode the same failure stays silent, because an uncertain observation must never trigger a distraction reminder.
 
 No screenshots or screen summaries are persisted by Heartbeat Companion. Screen handling remains owned by Moondream Vision.
 
@@ -47,3 +54,6 @@ No screenshots or screen summaries are persisted by Heartbeat Companion. Screen 
 - A screen result is discarded if the generation changed during inference.
 - Successful emission restarts the idle interval.
 - Shutdown disables emission before requesting worker termination.
+- Study commands cancel and replace the previous focus session atomically.
+- Study mode suppresses ordinary heartbeats, checks only at its own interval, and ends after one focus deadline.
+- Stopping study mode while screen inference is running invalidates and discards that result.

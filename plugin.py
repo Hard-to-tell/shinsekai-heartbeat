@@ -192,6 +192,36 @@ CONFIG_PAGE_SCHEMA = [
         ],
     },
     {
+        "id": "study",
+        "title": "Study supervision",
+        "description": (
+            "Say '我要学习，请监督我' in chat to start one quiet focus session. "
+            "Screen checks require Moondream Vision."
+        ),
+        "fields": [
+            _config_field(
+                "study_check_interval_minutes",
+                "Screen check interval (minutes)",
+                "number",
+                default=5.0,
+                description="How often study mode quietly checks the screen.",
+                max_value=60.0,
+                min_value=0.5,
+                step=0.5,
+            ),
+            _config_field(
+                "study_focus_minutes",
+                "Focus session length (minutes)",
+                "number",
+                default=25.0,
+                description="Study mode stops and suggests a break after this time.",
+                max_value=240.0,
+                min_value=1.0,
+                step=1.0,
+            ),
+        ],
+    },
+    {
         "id": "prompts",
         "title": "Prompts",
         "description": (
@@ -207,6 +237,20 @@ CONFIG_PAGE_SCHEMA = [
                 description=(
                     "One question sent to Moondream Vision. The English default is "
                     "recommended for compatibility, but it has no special format."
+                ),
+                span="full",
+            ),
+            _config_field(
+                "study_screen_question",
+                "Study classification question",
+                "textarea",
+                default=(
+                    "Classify the user's visible activity for a study supervision session. "
+                    "Reply with exactly one label first: STUDY, DISTRACTED, or UNCERTAIN, "
+                    "then a very short reason."
+                ),
+                description=(
+                    "One structured classification question sent to Moondream during study mode."
                 ),
                 span="full",
             ),
@@ -313,6 +357,21 @@ CONFIG_PAGE_I18N = {
                     },
                 },
             },
+            "study": {
+                "title": "学习监督",
+                "description": (
+                    "在聊天里对角色说“我要学习，请监督我”即可开启一轮低打扰专注；"
+                    "学习时保持安静，明确分心时才提醒。识屏检查需要 Moondream Vision。"
+                ),
+                "fields": {
+                    "study_check_interval_minutes": {
+                        "label": "识屏检查间隔（分钟）",
+                    },
+                    "study_focus_minutes": {
+                        "label": "每轮专注时长（分钟）",
+                    },
+                },
+            },
             "prompts": {
                 "title": "提示词",
                 "description": (
@@ -322,6 +381,9 @@ CONFIG_PAGE_I18N = {
                 "fields": {
                     "screen_question": {
                         "label": "识屏问题",
+                    },
+                    "study_screen_question": {
+                        "label": "学习状态分类问题",
                     },
                     "monologue_instruction": {
                         "label": "自言自语提示词",
@@ -365,7 +427,7 @@ class HeartbeatCompanionPlugin(PluginBase):
 
     @property
     def plugin_description(self) -> str:
-        return "让当前角色在你一段时间没有操作后自然地主动开口。"
+        return "让角色主动陪聊，也能安静监督 25 分钟学习，在你分心时把你叫回来。"
 
     @property
     def plugin_author(self) -> str:

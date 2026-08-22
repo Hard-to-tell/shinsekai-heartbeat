@@ -4,7 +4,15 @@ import unittest
 
 from tests import _bootstrap  # noqa: F401
 from plugins.heartbeat_companion.config import HeartbeatConfig
-from plugins.heartbeat_companion.vision import MAX_SCREEN_SUMMARY_CHARS, query_screen
+from plugins.heartbeat_companion.vision import (
+    DISTRACTED,
+    MAX_SCREEN_SUMMARY_CHARS,
+    STUDY,
+    UNCERTAIN,
+    classify_study_screen,
+    query_screen,
+    query_study_screen,
+)
 
 
 class VisionTests(unittest.TestCase):
@@ -42,6 +50,29 @@ class VisionTests(unittest.TestCase):
         entries = [(tool, "moondream_query_screen", None, "vision", "low")]
         answer = query_screen(HeartbeatConfig(), entries=entries)
         self.assertEqual(len(answer or ""), MAX_SCREEN_SUMMARY_CHARS)
+
+    def test_study_labels_are_strict_and_ambiguous_output_stays_silent(self) -> None:
+        self.assertEqual(classify_study_screen("STUDY - writing notes"), STUDY)
+        self.assertEqual(
+            classify_study_screen("DISTRACTED - watching a comedy clip"), DISTRACTED
+        )
+        self.assertEqual(classify_study_screen("Maybe reading something"), UNCERTAIN)
+
+    def test_study_query_uses_dedicated_classification_question(self) -> None:
+        received = {}
+
+        def tool(question, monitor_index):
+            received.update(question=question, monitor_index=monitor_index)
+            return {"answer": "STUDY - educational video on Bilibili"}
+
+        result = query_study_screen(
+            HeartbeatConfig(monitor_index=1),
+            entries=[(tool, "moondream_query_screen", None, "vision", "low")],
+        )
+
+        self.assertEqual(result, (STUDY, "STUDY - educational video on Bilibili"))
+        self.assertIn("educational videos", received["question"])
+        self.assertEqual(received["monitor_index"], 1)
 
 
 if __name__ == "__main__":
