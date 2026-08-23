@@ -30,8 +30,12 @@ _STUDY_START_PHRASES = (
     "开启学习模式",
     "打开学习模式",
     "开始专注",
+    "继续专注",
     "开启专注模式",
     "陪我学习",
+    "继续学习",
+    "继续监督",
+    "再来一轮学习",
 )
 _STUDY_STOP_PHRASES = (
     "停止监督",
@@ -96,7 +100,14 @@ def process_user_input(text: str) -> str:
         if scheduler is not None:
             command = detect_study_command(text)
             if command == "start":
-                scheduler.start_study_session()
+                focus_minutes = scheduler.start_study_session()
+                if focus_minutes is None:
+                    text = f"{text}\n[学习监督功能当前已关闭，本轮未启动。]"
+                else:
+                    text = (
+                        f"{text}\n[学习监督已开启：本轮实际专注时长为 {focus_minutes:g} 分钟。"
+                        "请按这个时长简短确认，不要自行改用其他时长。]"
+                    )
             elif command == "stop":
                 scheduler.stop_study_session()
             scheduler.note_user_activity(original_text)

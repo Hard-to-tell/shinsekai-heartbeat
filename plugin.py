@@ -10,7 +10,12 @@ from sdk.register import PluginCapabilityRegistry
 from sdk.types import ChatUIContribution, FrontendConfigContribution
 
 from . import __version__, runtime
-from .config import PLUGIN_ID, from_frontend_values, to_frontend_values
+from .config import (
+    DEFAULT_STUDY_SCREEN_QUESTION,
+    PLUGIN_ID,
+    from_frontend_values,
+    to_frontend_values,
+)
 
 
 def _config_field(
@@ -196,9 +201,17 @@ CONFIG_PAGE_SCHEMA = [
         "title": "Study supervision",
         "description": (
             "Say '我要学习，请监督我' in chat to start one quiet focus session. "
-            "Screen checks require Moondream Vision."
+            "Screen checks require Moondream Vision. Each local check can take several "
+            "seconds, so use at least 1 minute and prefer 3-5 minutes for normal use."
         ),
         "fields": [
+            _config_field(
+                "study_supervision_enabled",
+                "Enable study supervision",
+                "boolean",
+                default=True,
+                span="full",
+            ),
             _config_field(
                 "study_check_interval_minutes",
                 "Screen check interval (minutes)",
@@ -206,7 +219,7 @@ CONFIG_PAGE_SCHEMA = [
                 default=5.0,
                 description="How often study mode quietly checks the screen.",
                 max_value=60.0,
-                min_value=0.5,
+                min_value=1.0,
                 step=0.5,
             ),
             _config_field(
@@ -244,11 +257,7 @@ CONFIG_PAGE_SCHEMA = [
                 "study_screen_question",
                 "Study classification question",
                 "textarea",
-                default=(
-                    "Classify the user's visible activity for a study supervision session. "
-                    "Reply with exactly one label first: STUDY, DISTRACTED, or UNCERTAIN, "
-                    "then a very short reason."
-                ),
+                default=DEFAULT_STUDY_SCREEN_QUESTION,
                 description=(
                     "One structured classification question sent to Moondream during study mode."
                 ),
@@ -361,11 +370,15 @@ CONFIG_PAGE_I18N = {
                 "title": "学习监督",
                 "description": (
                     "在聊天里对角色说“我要学习，请监督我”即可开启一轮低打扰专注；"
-                    "学习时保持安静，明确分心时才提醒。识屏检查需要 Moondream Vision。"
+                    "确认在学习时保持安静，其余情况才提醒。识屏检查需要 Moondream Vision；"
+                    "本地识别一次可能需要十几秒，间隔至少 1 分钟，日常建议设为 3～5 分钟。"
                 ),
                 "fields": {
+                    "study_supervision_enabled": {
+                        "label": "启用学习监督（防止误触可关闭）",
+                    },
                     "study_check_interval_minutes": {
-                        "label": "识屏检查间隔（分钟）",
+                        "label": "识屏检查间隔（至少 1 分钟）",
                     },
                     "study_focus_minutes": {
                         "label": "每轮专注时长（分钟）",

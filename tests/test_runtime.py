@@ -17,6 +17,7 @@ class FakeScheduler:
         self.study_start_count = 0
         self.study_stop_count = 0
         self.study_was_active = True
+        self.study_focus_minutes: float | None = 25.0
 
     def note_user_activity(self, text: str | None = None) -> None:
         self.activity_count += 1
@@ -28,9 +29,9 @@ class FakeScheduler:
     def enable_reply_tracking(self, enabled: bool = True) -> None:
         self.reply_tracking.append(enabled)
 
-    def start_study_session(self) -> float:
+    def start_study_session(self) -> float | None:
         self.study_start_count += 1
-        return 25.0
+        return self.study_focus_minutes
 
     def stop_study_session(self) -> bool:
         self.study_stop_count += 1
@@ -78,6 +79,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_natural_language_starts_study_supervision(self) -> None:
         scheduler = FakeScheduler()
+        scheduler.study_focus_minutes = 3.0
         with runtime._lock:
             runtime._scheduler = scheduler
 
@@ -85,8 +87,35 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertEqual(scheduler.study_start_count, 1)
         self.assertEqual(scheduler.study_stop_count, 0)
-        self.assertEqual(processed, "我要学习，请监督我！")
+        self.assertTrue(processed.startswith("我要学习，请监督我！"))
+        self.assertIn("本轮实际专注时长为 3 分钟", processed)
+        self.assertIn("不要自行改用其他时长", processed)
         self.assertEqual(scheduler.activity_count, 1)
+
+    def test_continue_study_starts_a_fresh_session(self) -> None:
+        scheduler = FakeScheduler()
+        scheduler.study_focus_minutes = 3.0
+        with runtime._lock:
+            runtime._scheduler = scheduler
+
+        processed = runtime.process_user_input(
+            "不用，因为我一直在分心，继续学习三分钟"
+        )
+
+        self.assertEqual(scheduler.study_start_count, 1)
+        self.assertIn("本轮实际专注时长为 3 分钟", processed)
+
+    def test_disabled_study_supervision_does_not_claim_it_started(self) -> None:
+        scheduler = FakeScheduler()
+        scheduler.study_focus_minutes = None
+        with runtime._lock:
+            runtime._scheduler = scheduler
+
+        processed = runtime.process_user_input("监督我学习")
+
+        self.assertEqual(scheduler.study_start_count, 1)
+        self.assertIn("学习监督功能当前已关闭", processed)
+        self.assertNotIn("学习监督已开启", processed)
 
     def test_natural_language_stops_study_supervision(self) -> None:
         scheduler = FakeScheduler()

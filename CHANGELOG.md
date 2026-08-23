@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 - 2026-08-23
+
+- Make study supervision independently switchable, enabled by default.
+- Prefer short one-line distraction reminders and cap them at two lines.
+- Use a stricter two-label screen check, tell the character the configured session length, and support consecutive focus sessions.
+
 ## 0.4.0 - 2026-08-23
 
 - Add a natural-language study mode: say “我要学习，请监督我” to start a quiet focus session, or ask to stop/休息 to end it.

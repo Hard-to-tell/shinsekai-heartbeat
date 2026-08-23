@@ -21,11 +21,27 @@ LEGACY_FIXED_QUESTIONS = (
     "今天过得怎么样？",
     "忙了这么久，要不要休息一下？",
 )
+LEGACY_STUDY_SCREEN_QUESTION = (
+    "Classify the user's visible activity for a study supervision session. "
+    "Reply with exactly one label first: STUDY, DISTRACTED, or UNCERTAIN, then a "
+    "very short reason. STUDY includes reading, writing, coding, coursework, research, "
+    "and educational videos even on entertainment sites. DISTRACTED means clearly "
+    "unrelated entertainment such as casual videos, games, or social feeds. Use "
+    "UNCERTAIN when the evidence is ambiguous."
+)
+DEFAULT_STUDY_SCREEN_QUESTION = (
+    "Decide whether the visible screen is clearly being used for study. "
+    "Reply with exactly STUDY or DISTRACTED. Use STUDY only when there is clear "
+    "evidence of reading, writing, coding, coursework, research, or an educational "
+    "lecture or tutorial. Games, entertainment videos, social feeds, unrelated chats, "
+    "and anything unclear are DISTRACTED."
+)
 
 
 @dataclass(frozen=True)
 class HeartbeatConfig:
     enabled: bool = True
+    study_supervision_enabled: bool = True
     interval_minutes_range: tuple[float, float] = (5.0, 15.0)
     adaptive_idle_policy: bool = True
     mode_weights: dict[str, float] = field(
@@ -38,14 +54,7 @@ class HeartbeatConfig:
     )
     study_check_interval_minutes: float = 5.0
     study_focus_minutes: float = 25.0
-    study_screen_question: str = (
-        "Classify the user's visible activity for a study supervision session. "
-        "Reply with exactly one label first: STUDY, DISTRACTED, or UNCERTAIN, then a "
-        "very short reason. STUDY includes reading, writing, coding, coursework, research, "
-        "and educational videos even on entertainment sites. DISTRACTED means clearly "
-        "unrelated entertainment such as casual videos, games, or social feeds. Use "
-        "UNCERTAIN when the evidence is ambiguous."
-    )
+    study_screen_question: str = DEFAULT_STUDY_SCREEN_QUESTION
     monologue_instruction: str = (
         "Keep the current character persona and say something naturally."
     )
@@ -109,12 +118,22 @@ class HeartbeatConfig:
         )
         if fixed_questions == LEGACY_FIXED_QUESTIONS:
             fixed_questions = defaults.fixed_questions
+        study_screen_question = _text_or_default(
+            raw.get("study_screen_question"), defaults.study_screen_question
+        )
+        if study_screen_question == LEGACY_STUDY_SCREEN_QUESTION:
+            study_screen_question = defaults.study_screen_question
 
         return cls(
             enabled=(
                 raw.get("enabled")
                 if isinstance(raw.get("enabled"), bool)
                 else defaults.enabled
+            ),
+            study_supervision_enabled=(
+                raw.get("study_supervision_enabled")
+                if isinstance(raw.get("study_supervision_enabled"), bool)
+                else defaults.study_supervision_enabled
             ),
             interval_minutes_range=interval_range,
             adaptive_idle_policy=(
@@ -134,7 +153,7 @@ class HeartbeatConfig:
                 raw.get("screen_question"), defaults.screen_question
             ),
             study_check_interval_minutes=max(
-                0.5,
+                1.0,
                 min(
                     60.0,
                     _finite_float(
@@ -152,9 +171,7 @@ class HeartbeatConfig:
                     ),
                 ),
             ),
-            study_screen_question=_text_or_default(
-                raw.get("study_screen_question"), defaults.study_screen_question
-            ),
+            study_screen_question=study_screen_question,
             monologue_instruction=_text_or_default(
                 raw.get("monologue_instruction"), defaults.monologue_instruction
             ),
@@ -182,6 +199,7 @@ def to_frontend_values(config: HeartbeatConfig) -> dict[str, Any]:
     reply_min, reply_max = config.reply_sentence_range
     return {
         "enabled": config.enabled,
+        "study_supervision_enabled": config.study_supervision_enabled,
         "interval_min_minutes": interval_min,
         "interval_max_minutes": interval_max,
         "adaptive_idle_policy": config.adaptive_idle_policy,
@@ -211,6 +229,9 @@ def from_frontend_values(values: Mapping[str, Any]) -> HeartbeatConfig:
     defaults = HeartbeatConfig()
     raw = {
         "enabled": values.get("enabled", defaults.enabled),
+        "study_supervision_enabled": values.get(
+            "study_supervision_enabled", defaults.study_supervision_enabled
+        ),
         "interval_minutes_range": [
             _finite_float(
                 values.get("interval_min_minutes"),

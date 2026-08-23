@@ -666,6 +666,8 @@ class SchedulerTests(unittest.TestCase):
 
                 self.assertIn("第 1 次分心", emitted[0])
                 self.assertIn("温和但明确", emitted[0])
+                self.assertIn("默认只说 1 句", emitted[0])
+                self.assertIn("最多 2 句", emitted[0])
                 self.assertIn("第 2 次分心", emitted[1])
                 self.assertIn("略带不满", emitted[1])
                 self.assertIn("轻微气话", emitted[2])
@@ -705,6 +707,53 @@ class SchedulerTests(unittest.TestCase):
                 self.assertEqual(len(emitted), 1)
                 self.assertIn("心跳·学习完成", emitted[0])
                 self.assertIn("休息 5 分钟", emitted[0])
+            finally:
+                scheduler.stop()
+
+    def test_disabled_study_supervision_does_not_start(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(tmp, {"study_supervision_enabled": False})
+            scheduler = HeartbeatScheduler(store, lambda message: None, poll_seconds=999)
+            scheduler.start()
+            try:
+                self.assertIsNone(scheduler.start_study_session())
+                self.assertFalse(scheduler.study_active)
+            finally:
+                scheduler.stop()
+
+    def test_completed_session_can_start_again(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "study_check_interval_minutes": 1,
+                    "study_focus_minutes": 3,
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                study_screen_reader=lambda config: (
+                    "distracted",
+                    "DISTRACTED",
+                ),
+                clock=clock,
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                scheduler.start_study_session()
+                clock.advance(3 * 60)
+                self.assertTrue(scheduler.tick())
+                self.assertFalse(scheduler.study_active)
+
+                scheduler.start_study_session()
+                clock.advance(60)
+                self.assertTrue(scheduler.tick())
+                self.assertTrue(scheduler.study_active)
+                self.assertIn("第 1 次分心", emitted[-1])
             finally:
                 scheduler.stop()
 

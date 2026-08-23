@@ -29,6 +29,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.mode_weights["screen"], 50.0)
             self.assertEqual(config.study_check_interval_minutes, 5.0)
             self.assertEqual(config.study_focus_minutes, 25.0)
+            self.assertTrue(config.study_supervision_enabled)
             self.assertGreaterEqual(len(config.fixed_questions), 12)
             self.assertIn("忙了这么久，要不要休息一下？", config.fixed_questions)
             self.assertTrue(config.common_expressions)
@@ -87,7 +88,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.fixed_questions, ("睡了吗？",))
         self.assertEqual(config.expression_chance, 0.0)
         self.assertEqual(config.common_expressions, ("✨", "（打哈欠）"))
-        self.assertEqual(config.study_check_interval_minutes, 0.5)
+        self.assertEqual(config.study_check_interval_minutes, 1.0)
         self.assertEqual(config.study_focus_minutes, 240.0)
 
     def test_legacy_default_questions_expand_without_overwriting_custom_lists(self) -> None:
@@ -107,8 +108,24 @@ class ConfigTests(unittest.TestCase):
         self.assertGreaterEqual(len(legacy.fixed_questions), 12)
         self.assertEqual(custom.fixed_questions, ("只保留我自己的问题",))
 
+    def test_legacy_study_prompt_migrates_to_binary_classification(self) -> None:
+        legacy_prompt = (
+            "Classify the user's visible activity for a study supervision session. "
+            "Reply with exactly one label first: STUDY, DISTRACTED, or UNCERTAIN, then a "
+            "very short reason. STUDY includes reading, writing, coding, coursework, research, "
+            "and educational videos even on entertainment sites. DISTRACTED means clearly "
+            "unrelated entertainment such as casual videos, games, or social feeds. Use "
+            "UNCERTAIN when the evidence is ambiguous."
+        )
+
+        config = HeartbeatConfig.from_mapping({"study_screen_question": legacy_prompt})
+
+        self.assertNotIn("UNCERTAIN", config.study_screen_question)
+        self.assertIn("exactly STUDY or DISTRACTED", config.study_screen_question)
+
     def test_frontend_values_are_user_friendly(self) -> None:
         config = HeartbeatConfig(
+            study_supervision_enabled=False,
             interval_minutes_range=(2.5, 9.0),
             mode_weights={"screen": 10.0, "monologue": 30.0, "question": 60.0},
             adaptive_idle_policy=False,
@@ -133,11 +150,13 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(values["common_expressions_text"], "hmm\nsmile")
         self.assertEqual(values["study_check_interval_minutes"], 7.5)
         self.assertEqual(values["study_focus_minutes"], 40.0)
+        self.assertFalse(values["study_supervision_enabled"])
 
     def test_frontend_values_save_as_runtime_config(self) -> None:
         config = from_frontend_values(
             {
                 "enabled": False,
+                "study_supervision_enabled": False,
                 "interval_min_minutes": 30,
                 "interval_max_minutes": 10,
                 "screen_weight": 0,
@@ -161,6 +180,7 @@ class ConfigTests(unittest.TestCase):
         )
 
         self.assertFalse(config.enabled)
+        self.assertFalse(config.study_supervision_enabled)
         self.assertEqual(config.interval_minutes_range, (10.0, 30.0))
         self.assertEqual(config.mode_weights["screen"], 0.0)
         self.assertEqual(config.mode_weights["monologue"], 70.0)

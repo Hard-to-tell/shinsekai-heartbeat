@@ -100,10 +100,8 @@ def query_study_screen(
 
 
 def classify_study_screen(summary: str) -> str:
-    """Read the leading structured label; ambiguous model output stays silent."""
+    """Treat only a clear STUDY label as silent; other completed results remind."""
     prefix = summary.strip().lstrip("`*#[]()：: -").upper()
-    if prefix.startswith("DISTRACTED") or prefix.startswith("分心"):
-        return DISTRACTED
     if prefix.startswith("STUDY") or prefix.startswith("学习") or prefix.startswith("专注"):
         return STUDY
-    return UNCERTAIN
+    return DISTRACTED
