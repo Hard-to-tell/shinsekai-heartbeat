@@ -53,6 +53,14 @@ _STUDY_STOP_PHRASES = (
     "先休息一下",
     "我要休息",
 )
+_STUDY_CONFIRM_PHRASES = (
+    "没分心",
+    "没有分心",
+    "你看错了",
+    "我在学习",
+    "这是学习内容",
+    "这也是学习",
+)
 
 
 def configure(plugin_root: Path) -> ConfigStore:
@@ -110,6 +118,8 @@ def process_user_input(text: str) -> str:
                     )
             elif command == "stop":
                 scheduler.stop_study_session()
+            elif is_study_confirmation(text):
+                scheduler.trust_study_once()
             scheduler.note_user_activity(original_text)
     return text
 
@@ -122,6 +132,12 @@ def detect_study_command(text: str) -> str | None:
     if any(phrase in compact for phrase in _STUDY_START_PHRASES):
         return "start"
     return None
+
+
+def is_study_confirmation(text: str) -> bool:
+    """Recognize a simple correction when screen supervision guessed wrong."""
+    compact = re.sub(r"[\W_]+", "", str(text).lower(), flags=re.UNICODE)
+    return any(phrase in compact for phrase in _STUDY_CONFIRM_PHRASES)
 
 
 def bind_chat_ui(context: Any) -> None:

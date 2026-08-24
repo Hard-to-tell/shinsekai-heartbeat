@@ -30,6 +30,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.study_check_interval_minutes, 5.0)
             self.assertEqual(config.study_focus_minutes, 25.0)
             self.assertTrue(config.study_supervision_enabled)
+            self.assertEqual(config.study_safe_words, ("chat",))
             self.assertGreaterEqual(len(config.fixed_questions), 12)
             self.assertIn("忙了这么久，要不要休息一下？", config.fixed_questions)
             self.assertTrue(config.common_expressions)
@@ -108,7 +109,7 @@ class ConfigTests(unittest.TestCase):
         self.assertGreaterEqual(len(legacy.fixed_questions), 12)
         self.assertEqual(custom.fixed_questions, ("只保留我自己的问题",))
 
-    def test_legacy_study_prompt_migrates_to_binary_classification(self) -> None:
+    def test_legacy_study_prompts_migrate_to_lenient_classification(self) -> None:
         legacy_prompt = (
             "Classify the user's visible activity for a study supervision session. "
             "Reply with exactly one label first: STUDY, DISTRACTED, or UNCERTAIN, then a "
@@ -117,11 +118,19 @@ class ConfigTests(unittest.TestCase):
             "unrelated entertainment such as casual videos, games, or social feeds. Use "
             "UNCERTAIN when the evidence is ambiguous."
         )
+        binary_prompt = (
+            "Decide whether the visible screen is clearly being used for study. "
+            "Reply with exactly STUDY or DISTRACTED. Use STUDY only when there is clear "
+            "evidence of reading, writing, coding, coursework, research, or an educational "
+            "lecture or tutorial. Games, entertainment videos, social feeds, unrelated chats, "
+            "and anything unclear are DISTRACTED."
+        )
 
-        config = HeartbeatConfig.from_mapping({"study_screen_question": legacy_prompt})
+        legacy = HeartbeatConfig.from_mapping({"study_screen_question": legacy_prompt})
+        binary = HeartbeatConfig.from_mapping({"study_screen_question": binary_prompt})
 
-        self.assertNotIn("UNCERTAIN", config.study_screen_question)
-        self.assertIn("exactly STUDY or DISTRACTED", config.study_screen_question)
+        self.assertIn("When unsure, do not guess DISTRACTED", legacy.study_screen_question)
+        self.assertEqual(binary.study_screen_question, legacy.study_screen_question)
 
     def test_frontend_values_are_user_friendly(self) -> None:
         config = HeartbeatConfig(
@@ -151,6 +160,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(values["study_check_interval_minutes"], 7.5)
         self.assertEqual(values["study_focus_minutes"], 40.0)
         self.assertFalse(values["study_supervision_enabled"])
+        self.assertEqual(values["study_safe_words_text"], "chat")
 
     def test_frontend_values_save_as_runtime_config(self) -> None:
         config = from_frontend_values(
@@ -176,6 +186,7 @@ class ConfigTests(unittest.TestCase):
                 "study_check_interval_minutes": 8,
                 "study_focus_minutes": 50,
                 "study_screen_question": "Classify study activity.",
+                "study_safe_words_text": "ChatGPT\n\n学校课程\n",
             }
         )
 
@@ -194,6 +205,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.study_check_interval_minutes, 8.0)
         self.assertEqual(config.study_focus_minutes, 50.0)
         self.assertEqual(config.study_screen_question, "Classify study activity.")
+        self.assertEqual(config.study_safe_words, ("ChatGPT", "学校课程"))
 
 
 if __name__ == "__main__":

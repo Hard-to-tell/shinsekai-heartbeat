@@ -18,6 +18,7 @@ class FakeScheduler:
         self.study_stop_count = 0
         self.study_was_active = True
         self.study_focus_minutes: float | None = 25.0
+        self.study_trust_count = 0
 
     def note_user_activity(self, text: str | None = None) -> None:
         self.activity_count += 1
@@ -36,6 +37,10 @@ class FakeScheduler:
     def stop_study_session(self) -> bool:
         self.study_stop_count += 1
         return self.study_was_active
+
+    def trust_study_once(self) -> bool:
+        self.study_trust_count += 1
+        return True
 
     def stop(self) -> None:
         pass
@@ -145,6 +150,17 @@ class RuntimeTests(unittest.TestCase):
 
         runtime.process_user_input("你觉得我今天该学习什么？")
 
+        self.assertEqual(scheduler.study_start_count, 0)
+        self.assertEqual(scheduler.study_stop_count, 0)
+
+    def test_user_correction_trusts_study_for_one_check(self) -> None:
+        scheduler = FakeScheduler()
+        with runtime._lock:
+            runtime._scheduler = scheduler
+
+        runtime.process_user_input("没分心，你看错了，继续就好")
+
+        self.assertEqual(scheduler.study_trust_count, 1)
         self.assertEqual(scheduler.study_start_count, 0)
         self.assertEqual(scheduler.study_stop_count, 0)
 

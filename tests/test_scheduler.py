@@ -636,6 +636,48 @@ class SchedulerTests(unittest.TestCase):
             finally:
                 scheduler.stop()
 
+    def test_user_correction_skips_one_check_and_resets_escalation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(
+                tmp,
+                {
+                    "study_check_interval_minutes": 1,
+                    "study_focus_minutes": 25,
+                },
+            )
+            clock = FakeClock()
+            emitted: list[str] = []
+            checks: list[bool] = []
+
+            def study_reader(config):
+                _ = config
+                checks.append(True)
+                return ("distracted", "DISTRACTED - unrelated game")
+
+            scheduler = HeartbeatScheduler(
+                store,
+                emitted.append,
+                study_screen_reader=study_reader,
+                clock=clock,
+                poll_seconds=999,
+            )
+            scheduler.start()
+            try:
+                scheduler.start_study_session()
+                clock.advance(60)
+                self.assertTrue(scheduler.tick())
+
+                self.assertTrue(scheduler.trust_study_once())
+                clock.advance(60)
+                self.assertFalse(scheduler.tick())
+                self.assertEqual(len(checks), 1)
+
+                clock.advance(60)
+                self.assertTrue(scheduler.tick())
+                self.assertIn("第 1 次分心", emitted[-1])
+            finally:
+                scheduler.stop()
+
     def test_repeated_distraction_reminders_escalate_without_abuse(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = make_store(

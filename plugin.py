@@ -11,6 +11,7 @@ from sdk.types import ChatUIContribution, FrontendConfigContribution
 
 from . import __version__, runtime
 from .config import (
+    DEFAULT_STUDY_SAFE_WORDS,
     DEFAULT_STUDY_SCREEN_QUESTION,
     PLUGIN_ID,
     from_frontend_values,
@@ -232,6 +233,14 @@ CONFIG_PAGE_SCHEMA = [
                 min_value=1.0,
                 step=1.0,
             ),
+            _config_field(
+                "study_safe_words_text",
+                "Study safe words",
+                "textarea",
+                default="\n".join(DEFAULT_STUDY_SAFE_WORDS),
+                placeholder="One safe word per line",
+                span="full",
+            ),
         ],
     },
     {
@@ -370,7 +379,7 @@ CONFIG_PAGE_I18N = {
                 "title": "学习监督",
                 "description": (
                     "在聊天里对角色说“我要学习，请监督我”即可开启一轮低打扰专注；"
-                    "确认在学习时保持安静，其余情况才提醒。识屏检查需要 Moondream Vision；"
+                    "只有明确看到游戏、娱乐或刷帖才提醒，不确定时保持安静。识屏检查需要 Moondream Vision；"
                     "本地识别一次可能需要十几秒，间隔至少 1 分钟，日常建议设为 3～5 分钟。"
                 ),
                 "fields": {
@@ -382,6 +391,10 @@ CONFIG_PAGE_I18N = {
                     },
                     "study_focus_minutes": {
                         "label": "每轮专注时长（分钟）",
+                    },
+                    "study_safe_words_text": {
+                        "label": "学习安全词（每行一个）",
+                        "placeholder": "例如：chat",
                     },
                 },
             },

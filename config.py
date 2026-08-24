@@ -29,12 +29,24 @@ LEGACY_STUDY_SCREEN_QUESTION = (
     "unrelated entertainment such as casual videos, games, or social feeds. Use "
     "UNCERTAIN when the evidence is ambiguous."
 )
-DEFAULT_STUDY_SCREEN_QUESTION = (
+LEGACY_BINARY_STUDY_SCREEN_QUESTION = (
     "Decide whether the visible screen is clearly being used for study. "
     "Reply with exactly STUDY or DISTRACTED. Use STUDY only when there is clear "
     "evidence of reading, writing, coding, coursework, research, or an educational "
     "lecture or tutorial. Games, entertainment videos, social feeds, unrelated chats, "
     "and anything unclear are DISTRACTED."
+)
+DEFAULT_STUDY_SCREEN_QUESTION = (
+    "Classify the user's visible activity for study supervision. Reply with one label "
+    "first: STUDY, DISTRACTED, or UNCERTAIN, then a very short reason. STUDY includes "
+    "documents, notes, coding, coursework, research, educational videos, and AI "
+    "assistant conversations that could plausibly be for learning. Use DISTRACTED only "
+    "when the screen clearly shows an active game, unrelated entertainment, or leisure "
+    "social scrolling. Use UNCERTAIN for ordinary chats, mixed or unreadable screens, "
+    "and insufficient evidence. When unsure, do not guess DISTRACTED."
+)
+DEFAULT_STUDY_SAFE_WORDS = (
+    "chat",
 )
 
 
@@ -55,6 +67,7 @@ class HeartbeatConfig:
     study_check_interval_minutes: float = 5.0
     study_focus_minutes: float = 25.0
     study_screen_question: str = DEFAULT_STUDY_SCREEN_QUESTION
+    study_safe_words: tuple[str, ...] = DEFAULT_STUDY_SAFE_WORDS
     monologue_instruction: str = (
         "Keep the current character persona and say something naturally."
     )
@@ -121,7 +134,10 @@ class HeartbeatConfig:
         study_screen_question = _text_or_default(
             raw.get("study_screen_question"), defaults.study_screen_question
         )
-        if study_screen_question == LEGACY_STUDY_SCREEN_QUESTION:
+        if study_screen_question in (
+            LEGACY_STUDY_SCREEN_QUESTION,
+            LEGACY_BINARY_STUDY_SCREEN_QUESTION,
+        ):
             study_screen_question = defaults.study_screen_question
 
         return cls(
@@ -172,6 +188,9 @@ class HeartbeatConfig:
                 ),
             ),
             study_screen_question=study_screen_question,
+            study_safe_words=_text_list(
+                raw.get("study_safe_words"), defaults.study_safe_words
+            ),
             monologue_instruction=_text_or_default(
                 raw.get("monologue_instruction"), defaults.monologue_instruction
             ),
@@ -213,6 +232,7 @@ def to_frontend_values(config: HeartbeatConfig) -> dict[str, Any]:
         "study_check_interval_minutes": config.study_check_interval_minutes,
         "study_focus_minutes": config.study_focus_minutes,
         "study_screen_question": config.study_screen_question,
+        "study_safe_words_text": "\n".join(config.study_safe_words),
         "monologue_instruction": config.monologue_instruction,
         "question_instruction": config.question_instruction,
         "fixed_question_chance_percent": config.fixed_question_chance * 100.0,
@@ -275,6 +295,9 @@ def from_frontend_values(values: Mapping[str, Any]) -> HeartbeatConfig:
         ),
         "study_screen_question": values.get(
             "study_screen_question", defaults.study_screen_question
+        ),
+        "study_safe_words": _lines_from_text(
+            values.get("study_safe_words_text"), defaults.study_safe_words
         ),
         "monologue_instruction": values.get(
             "monologue_instruction", defaults.monologue_instruction

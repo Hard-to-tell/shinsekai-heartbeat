@@ -8,6 +8,7 @@ from plugins.heartbeat_companion.vision import (
     DISTRACTED,
     MAX_SCREEN_SUMMARY_CHARS,
     STUDY,
+    UNCERTAIN,
     classify_study_screen,
     query_screen,
     query_study_screen,
@@ -50,13 +51,28 @@ class VisionTests(unittest.TestCase):
         answer = query_screen(HeartbeatConfig(), entries=entries)
         self.assertEqual(len(answer or ""), MAX_SCREEN_SUMMARY_CHARS)
 
-    def test_study_labels_are_binary_and_ambiguous_output_reminds(self) -> None:
+    def test_only_explicit_distraction_reminds(self) -> None:
         self.assertEqual(classify_study_screen("STUDY - writing notes"), STUDY)
         self.assertEqual(
             classify_study_screen("DISTRACTED - watching a comedy clip"), DISTRACTED
         )
-        self.assertEqual(classify_study_screen("UNCERTAIN - maybe reading"), DISTRACTED)
-        self.assertEqual(classify_study_screen("Maybe playing a game"), DISTRACTED)
+        self.assertEqual(classify_study_screen("UNCERTAIN - maybe reading"), UNCERTAIN)
+        self.assertEqual(classify_study_screen("Maybe playing a game"), UNCERTAIN)
+
+    def test_safe_word_makes_an_ai_learning_chat_silent(self) -> None:
+        self.assertEqual(
+            classify_study_screen(
+                "DISTRACTED - a conversation in a chat application", ("chat",)
+            ),
+            STUDY,
+        )
+        self.assertEqual(
+            classify_study_screen(
+                "DISTRACTED - playing a game with Codex in the background",
+                ("Codex",),
+            ),
+            DISTRACTED,
+        )
 
     def test_study_query_uses_dedicated_classification_question(self) -> None:
         received = {}
@@ -71,8 +87,8 @@ class VisionTests(unittest.TestCase):
         )
 
         self.assertEqual(result, (STUDY, "STUDY - educational video on Bilibili"))
-        self.assertIn("exactly STUDY or DISTRACTED", received["question"])
-        self.assertIn("Games, entertainment videos", received["question"])
+        self.assertIn("STUDY, DISTRACTED, or UNCERTAIN", received["question"])
+        self.assertIn("Study-safe hints: chat", received["question"])
         self.assertEqual(received["monitor_index"], 1)
 
 

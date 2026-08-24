@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2 - 2026-08-24
+
+- Make study classification lenient: ambiguous, unreadable, and ordinary chat screens now stay silent.
+- Add configurable study-safe hints with one lightweight `chat` default covering AI chat interfaces.
+- Trust corrections such as “没分心” or “你看错了”, skip the next check, and reset reminder escalation.
+
 ## 0.4.1 - 2026-08-23
 
 - Make study supervision independently switchable, enabled by default.

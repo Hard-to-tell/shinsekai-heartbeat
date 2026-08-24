@@ -71,6 +71,7 @@ class HeartbeatScheduler:
         self._study_started_at: float | None = None
         self._study_next_check_at: float | None = None
         self._study_distractions = 0
+        self._study_trust_next_check = False
         self._study_generation = 0
 
     def start(self) -> None:
@@ -136,6 +137,7 @@ class HeartbeatScheduler:
                     now + config.study_check_interval_minutes * 60.0
                 )
                 self._study_distractions = 0
+                self._study_trust_next_check = False
                 self._study_generation += 1
         logger.info(
             "Study supervision started",
@@ -156,6 +158,7 @@ class HeartbeatScheduler:
                 self._study_started_at = None
                 self._study_next_check_at = None
                 self._study_distractions = 0
+                self._study_trust_next_check = False
                 self._study_generation += 1
                 self._last_activity_at = self._clock()
                 self._needs_reschedule = True
@@ -165,6 +168,19 @@ class HeartbeatScheduler:
                 extra={"event": "heartbeat.study.stopped"},
             )
         return was_active
+
+    def trust_study_once(self) -> bool:
+        """Trust the user's correction and skip the next due screen check."""
+        with self._lock:
+            if not self._study_active:
+                return False
+            self._study_trust_next_check = True
+            self._study_distractions = 0
+        logger.info(
+            "User correction will skip the next study screen check",
+            extra={"event": "heartbeat.study.user_confirmed"},
+        )
+        return True
 
     def enable_reply_tracking(self, enabled: bool = True) -> None:
         with self._lock:
@@ -346,6 +362,29 @@ class HeartbeatScheduler:
         if next_check_at is None or now < next_check_at:
             return False
 
+        with self._lock:
+            if (
+                not self._active
+                or not self._study_active
+                or generation != self._study_generation
+            ):
+                return False
+            trust_user = self._study_trust_next_check
+            if trust_user:
+                self._study_trust_next_check = False
+                self._study_next_check_at = (
+                    now + config.study_check_interval_minutes * 60.0
+                )
+        if trust_user:
+            logger.info(
+                "Study check stayed silent after user correction",
+                extra={
+                    "event": "heartbeat.study.silent",
+                    "status": "user_confirmed",
+                },
+            )
+            return False
+
         observation = self._study_screen_reader(config)
         with self._lock:
             if (
@@ -404,6 +443,7 @@ class HeartbeatScheduler:
                     self._study_started_at = None
                     self._study_next_check_at = None
                     self._study_distractions = 0
+                    self._study_trust_next_check = False
                     self._study_generation += 1
                     self._last_activity_at = now
                     self._needs_reschedule = True

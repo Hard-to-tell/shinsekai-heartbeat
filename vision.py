@@ -16,6 +16,19 @@ MAX_SCREEN_SUMMARY_CHARS = 300
 STUDY = "study"
 DISTRACTED = "distracted"
 UNCERTAIN = "uncertain"
+CLEAR_DISTRACTION_CUES = (
+    "active game",
+    "playing a game",
+    "video game",
+    "unrelated entertainment",
+    "social feed",
+    "short videos",
+    "comedy clip",
+    "游戏",
+    "娱乐视频",
+    "刷视频",
+    "刷帖",
+)
 
 ToolEntry = tuple[Callable[..., Any], str | None, str | None, str | None, str | None]
 StudyScreenResult = tuple[str, str]
@@ -90,18 +103,39 @@ def query_study_screen(
     entries: Iterable[ToolEntry] | None = None,
 ) -> StudyScreenResult | None:
     """Classify the visible activity for study mode using the same local screen tool."""
+    question = config.study_screen_question
+    if config.study_safe_words:
+        safe_words = ", ".join(config.study_safe_words)
+        question = (
+            f"{question} Study-safe hints: {safe_words}. If the visible activity "
+            "matches one of these hints and is not clearly recreational, use STUDY."
+        )
     summary = query_screen(
-        replace(config, screen_question=config.study_screen_question),
+        replace(config, screen_question=question),
         entries=entries,
     )
     if summary is None:
         return None
-    return classify_study_screen(summary), summary
+    return classify_study_screen(summary, config.study_safe_words), summary
 
 
-def classify_study_screen(summary: str) -> str:
-    """Treat only a clear STUDY label as silent; other completed results remind."""
+def classify_study_screen(
+    summary: str, safe_words: Iterable[str] = ()
+) -> str:
+    """Remind only for an explicit distraction; ambiguous results stay silent."""
+    folded_summary = summary.casefold()
+    has_safe_word = any(
+        word.strip() and word.strip().casefold() in folded_summary
+        for word in safe_words
+    )
+    has_clear_distraction = any(
+        cue.casefold() in folded_summary for cue in CLEAR_DISTRACTION_CUES
+    )
+    if has_safe_word and not has_clear_distraction:
+        return STUDY
     prefix = summary.strip().lstrip("`*#[]()：: -").upper()
     if prefix.startswith("STUDY") or prefix.startswith("学习") or prefix.startswith("专注"):
         return STUDY
-    return DISTRACTED
+    if prefix.startswith("DISTRACTED") or prefix.startswith("分心"):
+        return DISTRACTED
+    return UNCERTAIN

@@ -30,8 +30,9 @@ Manual checks:
 5. Installed Moondream contributes a short screen summary.
 6. Closing Shinsekai stops all future emission.
 7. “我要学习，请监督我” starts study mode and a stop phrase ends it.
-8. STUDY, UNCERTAIN, and unavailable screen results stay silent; DISTRACTED emits one reminder.
-9. Repeated distraction reminders escalate in tone, and the focus deadline emits a break reminder once.
+8. STUDY, UNCERTAIN, safe-hint, and unavailable screen results stay silent; DISTRACTED emits one reminder.
+9. User corrections skip one check and reset escalation; repeated clear distractions still escalate.
+10. The focus deadline emits a break reminder once.
 
 ## Release
 
