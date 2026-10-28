@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 - 2026-10-29
+
+- Allow ordinary heartbeat intervals from 30 seconds in settings and config loading, retaining bounded randomness and the 5–15 minute defaults. Study screen checks still require at least one minute.
+
 ## 0.5.1 - 2026-10-28
 
 - Enforce a one-minute minimum idle interval in settings and legacy configuration loading; retain bounded randomness and the 5–15 minute defaults.

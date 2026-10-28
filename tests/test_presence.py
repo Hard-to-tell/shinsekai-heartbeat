@@ -16,12 +16,12 @@ class PresenceTests(unittest.TestCase):
 
     def test_rejected_heartbeat_is_not_counted_as_success(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = make_store(tmp, {"interval_minutes": 1})
+            store = make_store(tmp, {"interval_minutes": 0.5})
             clock = FakeClock()
             scheduler = HeartbeatScheduler(store, lambda _: False, clock=clock)
             scheduler._active = True
             scheduler.tick()
-            clock.advance(60)
+            clock.advance(30)
             with self.assertLogs(level="ERROR"):
                 self.assertFalse(scheduler.tick())
             self.assertEqual(scheduler._unanswered_heartbeats, 0)
