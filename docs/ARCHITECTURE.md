@@ -48,8 +48,8 @@ No screenshots or screen summaries are persisted by Heartbeat Companion. Screen 
 - Startup waits a full interval before the first heartbeat.
 - User input updates a monotonic activity timestamp and generation counter.
 - Startup, user input, successful emission, and interval-range edits draw a fresh deadline.
-- Heartbeats remain paused until Chat UI reports final reply completion after TTS handling.
-- Multiple queued inputs keep heartbeats paused until every corresponding reply completes.
+- On the legacy Qt host, heartbeats remain paused until Chat UI reports final reply completion after TTS handling.
+- On that host, multiple queued inputs keep heartbeats paused until every corresponding reply completes. The 2.5.1 React host no longer builds this bridge; these guarantees do not apply there.
 - Consecutive selections exclude the previous mode, fixed question, and expression when alternatives exist.
 - A screen result is discarded if the generation changed during inference.
 - Successful emission restarts the idle interval.

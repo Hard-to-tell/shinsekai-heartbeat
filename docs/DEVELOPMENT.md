@@ -14,6 +14,8 @@ For a quick test, temporarily set `interval_minutes_range` to `[0.1, 0.2]`. Rest
 
 ## Verification
 
+The SDK smoke check verifies imports, registration, and config persistence only, not reply/TTS completion tracking. The current CI host remains pinned to 2.1.0.
+
 Run the standard-library test suite:
 
 ```powershell

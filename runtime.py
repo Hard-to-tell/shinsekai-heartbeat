@@ -11,6 +11,7 @@ from typing import Any
 from sdk.logging import get_logger
 
 from .config import ConfigStore, PLUGIN_ID
+from . import status
 from .scheduler import HEARTBEAT_MARKER, HeartbeatScheduler
 
 
@@ -91,7 +92,10 @@ def bind_emit(emit_user_text: Callable[[str], None]) -> None:
     if store is None:
         raise RuntimeError("Heartbeat Companion has not been configured")
 
-    scheduler = HeartbeatScheduler(store, emit_user_text)
+    scheduler = HeartbeatScheduler(
+        store, emit_user_text,
+        status_callback=lambda message: status.publish(store.path.parent, message),
+    )
     with _lock:
         _scheduler = scheduler
         reply_tracking_bound = _reply_tracking_bound

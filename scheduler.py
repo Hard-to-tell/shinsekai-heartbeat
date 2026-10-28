@@ -38,6 +38,7 @@ class HeartbeatScheduler:
         wall_clock: Callable[[], datetime] = datetime.now,
         rng: random.Random | None = None,
         poll_seconds: float = 1.0,
+        status_callback: Callable[[str], None] | None = None,
     ) -> None:
         self._config_store = config_store
         self._emit_user_text = emit_user_text
@@ -47,6 +48,8 @@ class HeartbeatScheduler:
         self._wall_clock = wall_clock
         self._rng = rng or random.Random()
         self._poll_seconds = max(0.05, float(poll_seconds))
+        self._status_callback = status_callback
+        self._status_updated_at = float("-inf")
 
         self._emit_gate = threading.RLock()
         self._lock = threading.Lock()
@@ -64,6 +67,7 @@ class HeartbeatScheduler:
         self._busy_since: float | None = None
         self._pending_replies = 0
         self._last_mode: str | None = None
+        self._unanswered_heartbeats = 0
         self._last_fixed_question: str | None = None
         self._last_expression: str | None = None
         self._recent_user_inputs: deque[str] = deque(maxlen=RECENT_USER_INPUT_LIMIT)
@@ -105,6 +109,7 @@ class HeartbeatScheduler:
                 now = self._clock()
                 self._last_activity_at = now
                 self._activity_generation += 1
+                self._unanswered_heartbeats = 0
                 self._needs_reschedule = True
                 cleaned = _clean_recent_user_input(text)
                 if cleaned:
@@ -214,7 +219,8 @@ class HeartbeatScheduler:
             self._was_enabled = False
             return False
 
-        if not config.study_supervision_enabled:
+        # Stop once on disable; repeated stops would reset the idle deadline forever.
+        if not config.study_supervision_enabled and self.study_active:
             self.stop_study_session()
 
         with self._lock:
@@ -319,6 +325,8 @@ class HeartbeatScheduler:
                 return False
             else:
                 with self._lock:
+                    if generation == self._activity_generation:
+                        self._unanswered_heartbeats += 1
                     self._last_activity_at = max(self._last_activity_at, now)
                     self._needs_reschedule = True
         self._last_mode = mode
@@ -481,11 +489,29 @@ class HeartbeatScheduler:
         while not self._stop_event.wait(self._poll_seconds):
             try:
                 self.tick()
+                if self._status_callback and self._clock() - self._status_updated_at >= 5:
+                    self._status_callback(self.status_text())
+                    self._status_updated_at = self._clock()
             except Exception:
                 logger.exception(
                     "Heartbeat scheduler check failed",
                     extra={"event": "heartbeat.scheduler.failed"},
                 )
+
+    def status_text(self) -> str:
+        config = self._config_store.get()
+        with self._lock:
+            if not self._active:
+                return "聊天已停止"
+            if not config.enabled:
+                return "已暂停（启用心跳陪伴后恢复）"
+            if self._study_active:
+                return "学习中"
+            if self._busy:
+                return "等待角色回复结束"
+            return "陪伴中 · 等待空闲" + (
+                "（当前宿主未连接语音结束通知）" if not self._reply_tracking else ""
+            )
 
     def _choose_mode(
         self,
@@ -512,6 +538,12 @@ class HeartbeatScheduler:
                 return
             low, high = config.interval_minutes_range
             interval = self._rng.uniform(low, high)
+            if config.adaptive_idle_policy and high > low:
+                # Keep the full configured range, biasing towards shorter waits
+                # initially and gently towards longer waits after no response.
+                fraction = (interval - low) / (high - low)
+                exponent = (1.5, 1.0, 0.8, 0.65)[min(self._unanswered_heartbeats, 3)]
+                interval = low + (high - low) * fraction ** exponent
             self._next_due_at = self._last_activity_at + interval * 60.0
             self._scheduled_range = config.interval_minutes_range
             self._needs_reschedule = False

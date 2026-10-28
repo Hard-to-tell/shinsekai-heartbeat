@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -31,6 +32,33 @@ def make_store(tmp: str, values: dict) -> ConfigStore:
 
 
 class SchedulerTests(unittest.TestCase):
+    def test_disabling_study_keeps_ordinary_heartbeats_running(self) -> None:
+        for starts_in_study in (False, True):
+            with self.subTest(starts_in_study=starts_in_study):
+                with tempfile.TemporaryDirectory() as tmp:
+                    store = make_store(tmp, {"interval_minutes": 0.1})
+                    clock = FakeClock()
+                    emitted: list[str] = []
+                    scheduler = HeartbeatScheduler(
+                        store, emitted.append, clock=clock, poll_seconds=999,
+                        screen_reader=lambda config: None,
+                    )
+                    scheduler.start()
+                    try:
+                        if starts_in_study:
+                            scheduler.start_study_session()
+                        store.save(replace(store.get(), study_supervision_enabled=False))
+                        self.assertFalse(scheduler.tick())
+                        self.assertFalse(scheduler.study_active)
+                        for _ in range(5):
+                            clock.advance(1)
+                            self.assertFalse(scheduler.tick())
+                        clock.advance(1)
+                        self.assertTrue(scheduler.tick())
+                        self.assertEqual(len(emitted), 1)
+                    finally:
+                        scheduler.stop()
+
     def test_heartbeat_waits_for_interval_and_restarts_timer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = make_store(

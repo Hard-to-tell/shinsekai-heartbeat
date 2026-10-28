@@ -9,7 +9,7 @@ from sdk.plugin_host_context import PluginHostContext
 from sdk.register import PluginCapabilityRegistry
 from sdk.types import ChatUIContribution, FrontendConfigContribution
 
-from . import __version__, runtime
+from . import __version__, runtime, status
 from .config import (
     DEFAULT_STUDY_SAFE_WORDS,
     DEFAULT_STUDY_SCREEN_QUESTION,
@@ -55,6 +55,13 @@ def _config_field(
 
 
 CONFIG_PAGE_SCHEMA = [
+    {"id": "runtime_status", "title": "运行状态", "description": "打开设置时刷新；下方启用开关可暂停或恢复。", "fields": []},
+    {
+        "id": "contact",
+        "title": "交流与反馈",
+        "description": "有问题和交流欢迎加 Q：375449714。",
+        "fields": [],
+    },
     {
         "id": "general",
         "title": "General",
@@ -475,6 +482,10 @@ class HeartbeatCompanionPlugin(PluginBase):
         register.register_user_input_trigger(runtime.bind_emit)
 
         def load_config_values():
+            CONFIG_PAGE_SCHEMA[0]["description"] = (
+                status.read(config_store.path.parent)
+                + "。重新打开设置可刷新；下方启用开关可暂停或恢复。"
+            )
             return to_frontend_values(config_store.get(force=True))
 
         def save_config_values(values):
