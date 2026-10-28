@@ -131,6 +131,8 @@ def process_user_input(text: str) -> str:
 def detect_study_command(text: str) -> str | None:
     """Recognize explicit Chinese natural-language study mode commands."""
     compact = re.sub(r"[\W_]+", "", str(text).lower(), flags=re.UNICODE)
+    if re.search(r"(?:不要|不用|别|不想|无需)(?:开启|打开|启动|开始)(?:学习|专注)(?:模式)?", compact):
+        return "stop"
     if any(phrase in compact for phrase in _STUDY_STOP_PHRASES):
         return "stop"
     if any(phrase in compact for phrase in _STUDY_START_PHRASES):

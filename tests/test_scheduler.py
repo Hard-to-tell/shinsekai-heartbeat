@@ -36,7 +36,7 @@ class SchedulerTests(unittest.TestCase):
         for starts_in_study in (False, True):
             with self.subTest(starts_in_study=starts_in_study):
                 with tempfile.TemporaryDirectory() as tmp:
-                    store = make_store(tmp, {"interval_minutes": 0.1})
+                    store = make_store(tmp, {"interval_minutes": 1})
                     clock = FakeClock()
                     emitted: list[str] = []
                     scheduler = HeartbeatScheduler(
@@ -50,7 +50,7 @@ class SchedulerTests(unittest.TestCase):
                         store.save(replace(store.get(), study_supervision_enabled=False))
                         self.assertFalse(scheduler.tick())
                         self.assertFalse(scheduler.study_active)
-                        for _ in range(5):
+                        for _ in range(59):
                             clock.advance(1)
                             self.assertFalse(scheduler.tick())
                         clock.advance(1)
@@ -110,7 +110,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "mode_weights": {"screen": 1, "monologue": 0, "question": 1},
                 },
             )
@@ -146,7 +146,7 @@ class SchedulerTests(unittest.TestCase):
             )
             scheduler.start()
             try:
-                clock.advance(6)
+                clock.advance(60)
                 self.assertTrue(scheduler.tick())
                 self.assertIn("心跳·主动提问", emitted[0])
             finally:
@@ -212,7 +212,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "mode_weights": {"screen": 1, "monologue": 0, "question": 0},
                 },
             )
@@ -234,7 +234,7 @@ class SchedulerTests(unittest.TestCase):
             )
             scheduler.start()
             try:
-                clock.advance(6)
+                clock.advance(60)
                 self.assertFalse(scheduler.tick())
                 self.assertEqual(emitted, [])
             finally:
@@ -245,7 +245,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "mode_weights": {"screen": 0, "monologue": 1, "question": 0},
                 },
             )
@@ -263,7 +263,7 @@ class SchedulerTests(unittest.TestCase):
 
             scheduler._build_message = build_message
             try:
-                clock.advance(6)
+                clock.advance(60)
                 self.assertFalse(scheduler.tick())
                 self.assertEqual(emitted, [])
             finally:
@@ -274,7 +274,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "mode_weights": {"screen": 0, "monologue": 1, "question": 0},
                 },
             )
@@ -291,7 +291,7 @@ class SchedulerTests(unittest.TestCase):
                 return original_build_message(*args, **kwargs)
 
             scheduler._build_message = build_message
-            clock.advance(6)
+            clock.advance(60)
 
             self.assertFalse(scheduler.tick())
             self.assertEqual(emitted, [])
@@ -301,7 +301,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "mode_weights": {"screen": 1, "monologue": 1, "question": 0},
                     "monologue_instruction": "Continue naturally.",
                 },
@@ -342,7 +342,7 @@ class SchedulerTests(unittest.TestCase):
                 scheduler.note_user_activity("second")
                 scheduler.note_user_activity("third")
                 scheduler.note_user_activity("x" * 200)
-                clock.advance(6)
+                clock.advance(60)
 
                 self.assertTrue(scheduler.tick())
                 self.assertIn("心跳·自言自语", emitted[0])
@@ -359,7 +359,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "adaptive_idle_policy": False,
                     "mode_weights": {"screen": 1, "monologue": 1, "question": 0},
                 },
@@ -393,7 +393,7 @@ class SchedulerTests(unittest.TestCase):
             )
             scheduler.start()
             try:
-                clock.advance(6)
+                clock.advance(60)
                 self.assertTrue(scheduler.tick())
                 self.assertIn("心跳·识屏", emitted[0])
             finally:
@@ -502,7 +502,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "mode_weights": {"screen": 0, "monologue": 1, "question": 0},
                 },
             )
@@ -514,7 +514,7 @@ class SchedulerTests(unittest.TestCase):
             scheduler.enable_reply_tracking(True)
             scheduler.start()
             try:
-                clock.advance(6)
+                clock.advance(60)
                 self.assertTrue(scheduler.tick())
 
                 clock.advance(60)
@@ -522,7 +522,7 @@ class SchedulerTests(unittest.TestCase):
                 self.assertEqual(len(emitted), 1)
 
                 scheduler.note_reply_finished()
-                clock.advance(5)
+                clock.advance(59)
                 self.assertFalse(scheduler.tick())
                 clock.advance(1)
                 self.assertTrue(scheduler.tick())
@@ -535,7 +535,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "mode_weights": {"screen": 0, "monologue": 1, "question": 0},
                 },
             )
@@ -555,7 +555,7 @@ class SchedulerTests(unittest.TestCase):
                 self.assertFalse(scheduler.tick())
 
                 scheduler.note_reply_finished()
-                clock.advance(5)
+                clock.advance(59)
                 self.assertFalse(scheduler.tick())
                 clock.advance(1)
                 self.assertTrue(scheduler.tick())
@@ -568,7 +568,7 @@ class SchedulerTests(unittest.TestCase):
             store = make_store(
                 tmp,
                 {
-                    "interval_minutes": 0.1,
+                    "interval_minutes": 1,
                     "mode_weights": {"screen": 0, "monologue": 1, "question": 1},
                     "fixed_question_chance": 1,
                     "fixed_questions": ["问题甲", "问题乙"],
@@ -608,7 +608,7 @@ class SchedulerTests(unittest.TestCase):
             scheduler.start()
             try:
                 for _ in range(4):
-                    clock.advance(6)
+                    clock.advance(60)
                     self.assertTrue(scheduler.tick())
 
                 self.assertIn("心跳·自言自语", emitted[0])

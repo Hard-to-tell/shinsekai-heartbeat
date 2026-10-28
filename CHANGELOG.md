@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 - 2026-10-28
+
+- Enforce a one-minute minimum idle interval in settings and legacy configuration loading; retain bounded randomness and the 5–15 minute defaults.
+- Handle negated study-start commands, discard in-flight observations after user corrections, and stop counting rejected heartbeat inputs as successful.
+- The Shinsekai 2.5.1 reply/TTS completion integration remains unavailable; the minimum interval is a mitigation, not a completion signal.
+
 ## 0.5.0 - 2026-10-28
 
 - Bias initial random waits toward active companionship; gently favor longer waits after unanswered heartbeats without exceeding the configured range. User input resets the bias; disabling adaptive mode preserves uniform waits.

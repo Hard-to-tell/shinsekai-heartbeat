@@ -181,6 +181,7 @@ class HeartbeatScheduler:
                 return False
             self._study_trust_next_check = True
             self._study_distractions = 0
+            self._study_generation += 1
         logger.info(
             "User correction will skip the next study screen check",
             extra={"event": "heartbeat.study.user_confirmed"},
@@ -308,7 +309,8 @@ class HeartbeatScheduler:
                     self._busy = True
                     self._busy_since = now
             try:
-                self._emit_user_text(message)
+                if self._emit_user_text(message) is False:
+                    raise RuntimeError("Host rejected heartbeat input")
             except Exception:
                 with self._lock:
                     if self._reply_tracking and self._pending_replies > 0:
@@ -460,7 +462,8 @@ class HeartbeatScheduler:
                     self._busy = True
                     self._busy_since = now
             try:
-                self._emit_user_text(message)
+                if self._emit_user_text(message) is False:
+                    raise RuntimeError("Host rejected study input")
             except Exception:
                 with self._lock:
                     if self._reply_tracking and self._pending_replies > 0:

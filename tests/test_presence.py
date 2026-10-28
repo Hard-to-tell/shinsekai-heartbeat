@@ -6,9 +6,43 @@ from tests import _bootstrap
 from tests.test_scheduler import make_store, FakeClock
 from plugins.heartbeat_companion import status
 from plugins.heartbeat_companion.scheduler import HeartbeatScheduler
+from plugins.heartbeat_companion.runtime import detect_study_command
 
 
 class PresenceTests(unittest.TestCase):
+    def test_negative_start_does_not_enable_study(self):
+        for text in ("不要开启学习模式", "别打开专注模式", "不想开始学习"):
+            self.assertEqual(detect_study_command(text), "stop")
+
+    def test_rejected_heartbeat_is_not_counted_as_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(tmp, {"interval_minutes": 1})
+            clock = FakeClock()
+            scheduler = HeartbeatScheduler(store, lambda _: False, clock=clock)
+            scheduler._active = True
+            scheduler.tick()
+            clock.advance(60)
+            with self.assertLogs(level="ERROR"):
+                self.assertFalse(scheduler.tick())
+            self.assertEqual(scheduler._unanswered_heartbeats, 0)
+
+    def test_correction_discards_inflight_study_observation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = make_store(tmp, {"study_check_interval_minutes": 1})
+            clock = FakeClock()
+            emitted = []
+            def screen(config):
+                scheduler.trust_study_once()
+                scheduler.note_user_activity("没分心，你看错了")
+                return ("distracted", "DISTRACTED: video game")
+            scheduler = HeartbeatScheduler(store, emitted.append, clock=clock, study_screen_reader=screen)
+            scheduler._active = True
+            scheduler.start_study_session()
+            clock.advance(60)
+            self.assertFalse(scheduler.tick())
+            self.assertEqual(emitted, [])
+            self.assertEqual(scheduler._study_distractions, 0)
+
     def test_random_wait_is_bounded_and_recovers_after_user_input(self):
         class MidpointRandom:
             def uniform(self, low, high):

@@ -110,7 +110,7 @@ class HeartbeatConfig:
         interval_range = _float_range(
             raw_interval_range,
             defaults.interval_minutes_range,
-            minimum=0.1,
+            minimum=1.0,
             maximum=1440.0,
         )
 

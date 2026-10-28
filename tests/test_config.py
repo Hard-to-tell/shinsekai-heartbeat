@@ -44,7 +44,7 @@ class ConfigTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(config.interval_minutes_range, (0.1, 0.1))
+        self.assertEqual(config.interval_minutes_range, (1.0, 1.0))
         self.assertEqual(config.monitor_index, 32)
         self.assertEqual(config.mode_weights["screen"], 0.0)
         self.assertEqual(config.mode_weights["monologue"], 1.0)
@@ -69,7 +69,7 @@ class ConfigTests(unittest.TestCase):
                 json.dumps({"interval_minutes_range": [0.1, 0.5]}), encoding="utf-8"
             )
 
-            self.assertEqual(store.get().interval_minutes_range, (0.1, 0.5))
+            self.assertEqual(store.get().interval_minutes_range, (1.0, 1.0))
 
     def test_custom_content_lists_and_ranges_are_loaded(self) -> None:
         config = HeartbeatConfig.from_mapping(

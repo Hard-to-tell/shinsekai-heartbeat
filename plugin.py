@@ -85,7 +85,7 @@ CONFIG_PAGE_SCHEMA = [
                 default=5.0,
                 description="Shortest idle wait before the character may speak.",
                 max_value=1440.0,
-                min_value=0.1,
+                min_value=1.0,
                 step=0.1,
             ),
             _config_field(
@@ -95,7 +95,7 @@ CONFIG_PAGE_SCHEMA = [
                 default=15.0,
                 description="Longest idle wait before the character may speak.",
                 max_value=1440.0,
-                min_value=0.1,
+                min_value=1.0,
                 step=0.1,
             ),
             _config_field(
