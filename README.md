@@ -136,7 +136,7 @@ Shinsekai/data/plugins/io.github.hard_to_tell.heartbeat_companion/config.json
 
 - 确认插件已启用，并在安装或更新后完整重启过 Shinsekai。
 - 测试时把空闲时间设为 `0.5–1` 分钟（30～60 秒），并保持聊天窗口开启。
-- 用户刚发送消息、角色正在回复或 TTS 正在播放时，计时会重新开始。
+- 用户刚发送消息或角色正在回复时，计时会重新开始；宿主不提供语音播放结束信号，语音很长时心跳仍可能稍早触发。
 - 只关闭识屏模式不会影响自言自语和提问模式。
 
 开发结构与测试方法见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 和 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
