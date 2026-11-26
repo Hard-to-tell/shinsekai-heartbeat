@@ -48,6 +48,10 @@ def main() -> None:
         plugin.initialize(registry, Path(tmp), object())
         config_path = Path(tmp) / "config.json"
         assert config_path.is_file()
+        if hasattr(registry, "register_message_added_hook"):
+            from sdk.hooks import PluginHookEvent
+
+            assert registry.hook_dispatcher.has_hooks(PluginHookEvent.MESSAGE_ADDED)
 
         config_page = registry.frontend_config_contributions[0]
         values = config_page.load_values()

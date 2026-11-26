@@ -165,6 +165,30 @@ def bind_chat_ui(context: Any) -> None:
         scheduler.enable_reply_tracking(True)
 
 
+def enable_message_reply_tracking() -> None:
+    """Track reply completion through the host's ``message_added`` hook.
+
+    Shinsekai 2.5+ no longer builds Qt chat widgets, so ``bind_chat_ui`` is
+    never called there. A final assistant message added to history is the
+    closest available completion signal (TTS playback end is not exposed).
+    """
+    global _reply_tracking_bound
+    with _lock:
+        _reply_tracking_bound = True
+        scheduler = _scheduler
+    if scheduler is not None:
+        scheduler.enable_reply_tracking(True)
+
+
+def on_message_added(context: Any) -> None:
+    if getattr(context, "role", "") != "assistant":
+        return
+    message = getattr(context, "message", None)
+    if isinstance(message, dict) and message.get("tool_calls"):
+        return
+    _on_reply_finished()
+
+
 def _on_reply_finished() -> None:
     with _lock:
         scheduler = _scheduler

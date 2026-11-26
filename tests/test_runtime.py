@@ -184,5 +184,29 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(scheduler.reply_tracking, [True, False])
 
 
+    def test_final_assistant_message_releases_scheduler(self) -> None:
+        from types import SimpleNamespace
+
+        scheduler = FakeScheduler()
+        with runtime._lock:
+            runtime._scheduler = scheduler
+
+        runtime.enable_message_reply_tracking()
+        self.assertEqual(scheduler.reply_tracking, [True])
+
+        runtime.on_message_added(SimpleNamespace(role="user", message={"content": "hi"}))
+        runtime.on_message_added(
+            SimpleNamespace(role="assistant", message={"content": None, "tool_calls": [{"id": "t"}]})
+        )
+        runtime.on_message_added(SimpleNamespace(role="tool", message={"content": "ok"}))
+        self.assertEqual(scheduler.reply_finished_count, 0)
+
+        runtime.on_message_added(SimpleNamespace(role="assistant", message={"content": "done"}))
+        self.assertEqual(scheduler.reply_finished_count, 1)
+
+        runtime.shutdown()
+        self.assertEqual(scheduler.reply_tracking, [True, False])
+
+
 if __name__ == "__main__":
     unittest.main()

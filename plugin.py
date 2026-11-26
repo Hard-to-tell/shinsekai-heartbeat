@@ -460,7 +460,7 @@ class HeartbeatCompanionPlugin(PluginBase):
 
     @property
     def plugin_description(self) -> str:
-        return "让角色主动陪聊，也能安静监督 25 分钟学习，在你分心时把你叫回来。"
+        return "空闲时让角色自然地主动开口陪你聊天；需要时也能按时提醒、监督你专注。"
 
     @property
     def plugin_author(self) -> str:
@@ -480,6 +480,10 @@ class HeartbeatCompanionPlugin(PluginBase):
         config_store = runtime.configure(plugin_root)
         register.register_user_input_processor(runtime.process_user_input)
         register.register_user_input_trigger(runtime.bind_emit)
+        register_message_added = getattr(register, "register_message_added_hook", None)
+        if callable(register_message_added):
+            register_message_added(runtime.on_message_added)
+            runtime.enable_message_reply_tracking()
 
         def load_config_values():
             CONFIG_PAGE_SCHEMA[0]["description"] = (

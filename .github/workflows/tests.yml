@@ -7,12 +7,17 @@ on:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        host_ref:
+          - 4125f513e2372898cc51b5da81135f2d359d0f87
+          - v2.7.0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: RachelForster/Shinsekai
-          ref: 4125f513e2372898cc51b5da81135f2d359d0f87
+          ref: ${{ matrix.host_ref }}
           path: .shinsekai-host
           sparse-checkout: sdk
       - uses: actions/setup-python@v5

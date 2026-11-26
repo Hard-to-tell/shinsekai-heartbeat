@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 - 2026-11-26
+
+- Shinsekai 2.7 compatibility: track reply completion through the host `message_added` hook, so heartbeats no longer fire while the character is still replying. The retired Qt chat bridge is kept only for older hosts. Voice playback end is still not exposed by the host, so the minimum idle interval remains a mitigation.
+- Reword the plugin and marketplace descriptions around idle companionship and reminder/supervision.
+
 ## 0.5.2 - 2026-10-29
 
 - Allow ordinary heartbeat intervals from 30 seconds in settings and config loading, retaining bounded randomness and the 5–15 minute defaults. Study screen checks still require at least one minute.
