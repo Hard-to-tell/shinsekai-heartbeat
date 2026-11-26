@@ -19,7 +19,6 @@
 
 - Bias initial random waits toward active companionship; gently favor longer waits after unanswered heartbeats without exceeding the configured range. User input resets the bias; disabling adaptive mode preserves uniform waits.
 - Show expiring chat status only in settings, refreshed when reopening the page, and add QQ contact information.
-
 - Fix ordinary heartbeats never becoming due when study supervision is disabled.
 - Document the Shinsekai 2.5.1 compatibility gap: the retired Qt bridge no longer provides final reply/TTS completion notifications. SDK import success is not full runtime compatibility.
 
